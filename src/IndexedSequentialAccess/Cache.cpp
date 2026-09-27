@@ -62,35 +62,53 @@ std::string Cache::GetCachePath(const File&input){
 
 std::optional<Cache::Entry> Cache::Search(int key){
 
-//carregado pela primeira vez, o vetor estara vazio
-    if(this->entries_.empty()){
-        if(!this->file_.is_open()){
-            return std::nullopt;
-        }
-//posiciona o ponteiro pra logo apos os metadados
-        this->file_.seekg(sizeof(Metadata), std::ifstream::beg);
-        Entry entry;
-//le as entradas e coloca no fim do vetor de indices
-        while(this->file_.read((char*)&entry,sizeof(Entry))){
-            this->entries_.push_back(entry);
-        }
-
-        this->file_.clear();
-    }
-//faz a busca propriamente dita
-    size_t i = 0;
-    size_t const tam = this->entries_.size();
-
-    while(i < tam && this->entries_[i].key <= key){
-        i++;
-    }
-//a chave eh menor que a chave do primeiro indice
-    if (i == 0){
+//Verifica se o arq de indice esta aberto
+    if (!this->file_.is_open()) {
         return std::nullopt;
     }
 
-    return this->entries_[i-1];
+// calcula o tam total do arquivo e ve se tem pelo menos os metadados
+    this->file_.seekg(0, std::ifstream::end);
+    auto const fileSize = this->file_.tellg();
 
+    uint64_t const sizeInBytes = static_cast<uint64_t>(fileSize);
+
+
+    if (sizeInBytes < sizeof(Metadata)) {
+        return std::nullopt;
+    }
+
+// calcula numero de paginas
+    uint64_t const totalEntries = (sizeInBytes - sizeof(Metadata)) / sizeof(Entry);
+    if (totalEntries == 0) {
+        return std::nullopt;
+    }
+
+    int64_t lower = 0;
+    int64_t higher = totalEntries -1;
+
+    std::optional<Entry> result = std::nullopt;
+
+//loop de busca
+    while(lower <= higher){
+        int64_t mid = lower + (higher - lower) / 2;
+//deslocamento para a pag intermediaria
+        std::streampos const offset = sizeof(Metadata) + (mid *sizeof(Entry));
+        this->file_.seekg(offset, std::ifstream::beg);
+
+        Entry entry;
+        this->file_.read((char*)&entry, sizeof(Entry));
+
+        if(entry.key <= key){
+        result = entry;
+//procura na metade superior
+        lower = mid +1;
+        }else{
+//procura na metade inferior
+            higher = mid -1;
+        }
+    }
+    return result;
 }
 
 

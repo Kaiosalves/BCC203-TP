@@ -212,7 +212,7 @@ private:
      * novo nó com `AppendNode`, atualiza o ponteiro `right` do nó pai e o salva
      * com `WriteNode`.
      * - Se a chave já existir no nó, a inserção é encerrada sem duplicar.
-     *
+     * - Se o nó atual possui filho à esquerda ou à direita, a função recursivamente ou iterativamente continua a busca no nó filho correspondente até encontrar a posição correta para inserção.
      * @param file Fluxo de leitura/escrita do arquivo da árvore binária.
      * @param item Item a ser inserido.
      * @param pageIndex Índice da página do arquivo de dados onde o item se

@@ -1,5 +1,6 @@
 #include "ISA.hpp"
 
+<<<<<<< HEAD
     // 2
     /**
      * @brief Executa a pesquisa de um registro pela chave usando Acesso
@@ -57,3 +58,9 @@ std::optional<Item> Algorithm::IndexedSequentialAccess::ISA::Search(int key) {
 
     return std::nullopt;
 }
+=======
+namespace Algorithm::IndexedSequentialAccess {
+
+ISA::ISA(std::shared_ptr<File> input) : input_(input), cache_(*input) {}
+}  // namespace Algorithm::IndexedSequentialAccess
+>>>>>>> master

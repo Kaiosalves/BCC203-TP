@@ -2,28 +2,12 @@
 
 #include <stdexcept>
 
-namespace Algorithm::BinaryTree {
+#include "Common.hpp"
+// #include "File.hpp"
+// #include "Item.hpp"
 
-/**
-     * @brief Insere um item individual na árvore binária em disco.
-     *
-     * Navega a partir da raiz (índice 0). Compara a chave do item com a do nó
-     * atual:
-     * - Se menor e o nó não possui filho esquerdo (`left == 0`), adiciona o
-     * novo nó com `AppendNode`, atualiza o ponteiro `left` do nó pai e o salva
-     * com `WriteNode`.
-     * - Se maior e o nó não possui filho direito (`right == 0`), adiciona o
-     * novo nó com `AppendNode`, atualiza o ponteiro `right` do nó pai e o salva
-     * com `WriteNode`.
-     * - Se a chave já existir no nó, a inserção é encerrada sem duplicar.
-     * - Se o nó atual possui filho à esquerda ou à direita, a função recursivamente ou iterativamente continua a busca no nó filho correspondente até encontrar a posição correta para inserção.
-     * @param file Fluxo de leitura/escrita do arquivo da árvore binária.
-     * @param item Item a ser inserido.
-     * @param pageIndex Índice da página do arquivo de dados onde o item se
-     * encontra.
-     * @param lastNodeIndex Referência para o índice do último nó da árvore.
-     */
-// 2
+using namespace Algorithm::BinaryTree;
+
 void BTreeFile::InsertItem(std::fstream& file, const Item& item,
                            uint64_t pageIndex, uint64_t& lastNodeIndex) {
     uint64_t currentIndex = 0;
@@ -50,29 +34,30 @@ void BTreeFile::InsertItem(std::fstream& file, const Item& item,
             continue;
         }
 
-        // O ponteiro nulo marca a posição vazia. Cria ali o novo nó e liga ele ao pai, persistindo a alteração do pai no arquivo.
-        const Node newNode{.key = item.key, .pageIndex = pageIndex, .left = 0, .right = 0};
+        // O ponteiro nulo marca a posição vazia. Cria ali o novo nó e liga ele
+        // ao pai, persistindo a alteração do pai no arquivo.
+        const Node newNode{
+            .key = item.key, .pageIndex = pageIndex, .left = 0, .right = 0};
         childIndex = AppendNode(file, newNode, lastNodeIndex);
         WriteNode(file, currentIndex, currentNode);
         return;
     }
 }
 
-/**
- * @brief Constrói o arquivo completo da árvore binária em disco a partir do
- * arquivo de dados.
- *
- * @param input Arquivo de dados de entrada.
- * @param path Caminho onde o arquivo da árvore binária será criado.
- */
-// 2
+std::streamoff BTreeFile::GetNodeOffset(uint64_t nodeIndex) {
+    return static_cast<std::streamoff>(nodeIndex * sizeof(Node) +
+                                       sizeof(Metadata));
+}
+
 void BTreeFile::BuildFile(File& input, const std::string& path) {
-    // Fecha qualquer árvore previamente carregada para que a nova versão possa ser criada sem manter um fluxo antigo aberto.
+    // Fecha qualquer árvore previamente carregada para que a nova versão possa
+    // ser criada sem manter um fluxo antigo aberto.
     file_.close();
     file_.clear();
 
     // Abre para leitura e escrita binária. `trunc` descarta uma árvore antiga.
-    std::fstream output(path, std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+    std::fstream output(path, std::ios::binary | std::ios::in | std::ios::out |
+                                  std::ios::trunc);
     if (!output.is_open()) {
         throw std::runtime_error("Failed to create binary tree file: " + path);
     }
@@ -104,6 +89,7 @@ void BTreeFile::BuildFile(File& input, const std::string& path) {
     if (!output) {
         throw std::runtime_error("Failed to flush binary tree file");
     }
+
     output.close();
     if (output.fail()) {
         throw std::runtime_error("Failed to close binary tree file");
@@ -116,4 +102,83 @@ void BTreeFile::BuildFile(File& input, const std::string& path) {
     }
 }
 
-}  // namespace Algorithm::BinaryTree
+void BTreeFile::WriteNode(std::fstream& file, uint64_t nodeIndex,
+                          const Node& node) {
+    file.seekg(GetNodeOffset(nodeIndex));
+    file.write(reinterpret_cast<const char*>(&node), sizeof(Node));
+}
+
+bool BTreeFile::ReadNode(std::istream& file, uint64_t nodeIndex, Node& node) {
+    if (!file.eof()) {
+        file.seekg(GetNodeOffset(nodeIndex));
+        if (file.eof()) return false;
+        file.read(reinterpret_cast<char*>(&node), sizeof(Node));
+        return true;
+    }
+
+    return false;
+}
+
+uint64_t BTreeFile::AppendNode(std::fstream& file, const Node& node,
+                               uint64_t& lastNodeIndex) {
+    lastNodeIndex++;  // incrementa o contador
+    file.seekg(GetNodeOffset(lastNodeIndex));
+    if (!file.eof()) {
+        WriteNode(file, lastNodeIndex, node);
+        return lastNodeIndex;
+    }
+
+    return 0;
+}
+
+void BTreeFile::WriteMetadata(std::fstream& file, const File& input) {
+    // Reiniciando arquivo
+    file.clear();
+    file.seekg(0, std::ios::beg);
+    file.seekp(0, std::ios::beg);
+    // Buscando  metadados
+    Metadata tmp;
+    tmp.lastModification = input.lastModification();
+    tmp.size = input.size();
+    // escrevendo os metadados na arvore
+    file.write(reinterpret_cast<char*>(&tmp), sizeof(Metadata));
+}
+
+void BTreeFile::InitializeRoot(std::fstream& file, File& input) {
+    // calcula onde a página central está
+    uint64_t itemMeio = input.quantity() / 2;
+    u_int64_t pageIndex = itemMeio / PAGE_SIZE;
+
+    u_int64_t offsetNaPag =
+        itemMeio % PAGE_SIZE;  // item central da página do meio
+    std::array<Item, PAGE_SIZE> page;
+    page = input.GetPageAt(pageIndex);
+    // inicializando valores
+    Node noRaiz;
+    noRaiz.key = page[offsetNaPag].key;
+    noRaiz.pageIndex = pageIndex;
+    noRaiz.left = 0;
+    noRaiz.right = 0;
+    // Escreve no final do aquivo
+    WriteNode(file, 0, noRaiz);
+}
+
+void BTreeFile::InsertPage(std::fstream& file,
+                           const std::array<Item, PAGE_SIZE>& page,
+                           uint64_t pageIndex, uint64_t& lastNodeIndex) {
+    for (int i = 0; i < PAGE_SIZE; i++) {
+        InsertItem(file, page[i], pageIndex, lastNodeIndex);
+    }
+}
+
+void BTreeFile::PopulateTree(std::fstream& file, File& input,
+                             uint64_t& lastNodeIndex) {
+    lastNodeIndex = 0;
+    u_int64_t pageIndex = 0;
+    std::array<Item, PAGE_SIZE> page;
+    while (!input.eof()) {
+        page = input.GetNextPage();
+        InsertPage(file, page, pageIndex, lastNodeIndex);
+        pageIndex++;
+    }
+}

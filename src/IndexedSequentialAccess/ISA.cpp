@@ -20,12 +20,14 @@
      * @return std::optional<Item> O item correspondente caso encontrado na
      * página; caso contrário, std::nullopt (vazio).
      */
-std::optional<Item> Algorithm::IndexedSequentialAccess::ISA::Search(int key) {
+    std::optional<Item> Algorithm::IndexedSequentialAccess::ISA::Search(
+        int key) {
     if (!input_) {
         return std::nullopt;
     }
 
-    // consulta o índice em disco para descobrir em qual página procurar a chave.
+    // consulta o índice em disco para descobrir em qual página procurar a
+    // chave.
     const auto indexEntry = cache_.Search(key);
     if (!indexEntry.has_value()) {
         return std::nullopt;
@@ -36,8 +38,10 @@ std::optional<Item> Algorithm::IndexedSequentialAccess::ISA::Search(int key) {
     // quantidade de itens no arquivo
     const uint64_t quantity = input_->quantity();
 
-    // Calcula quantas páginas existem, incluindo uma possível última página parcial
-    const uint64_t pageCount = quantity / PAGE_SIZE + (quantity % PAGE_SIZE != 0);
+    // Calcula quantas páginas existem, incluindo uma possível última página
+    // parcial
+    const uint64_t pageCount =
+        quantity / PAGE_SIZE + (quantity % PAGE_SIZE != 0);
     if (pageIndex >= pageCount) {
         return std::nullopt;
     }

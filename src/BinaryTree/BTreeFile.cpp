@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-#include "Common.hpp"
+#include "../Common.hpp"
 // #include "File.hpp"
 // #include "Item.hpp"
 
@@ -45,7 +45,7 @@ void BTreeFile::InsertItem(std::fstream& file, const Item& item,
 }
 
 std::streamoff BTreeFile::GetNodeOffset(uint64_t nodeIndex) {
-    return static_cast<std::streamoff>(nodeIndex * sizeof(Node) +
+    return static_cast<std::streamoff>((nodeIndex * sizeof(Node)) +
                                        sizeof(Metadata));
 }
 
@@ -111,7 +111,9 @@ void BTreeFile::WriteNode(std::fstream& file, uint64_t nodeIndex,
 bool BTreeFile::ReadNode(std::istream& file, uint64_t nodeIndex, Node& node) {
     if (!file.eof()) {
         file.seekg(GetNodeOffset(nodeIndex));
-        if (file.eof()) return false;
+        if (file.eof()) {
+            return false;
+        }
         file.read(reinterpret_cast<char*>(&node), sizeof(Node));
         return true;
     }
@@ -146,10 +148,10 @@ void BTreeFile::WriteMetadata(std::fstream& file, const File& input) {
 
 void BTreeFile::InitializeRoot(std::fstream& file, File& input) {
     // calcula onde a página central está
-    uint64_t itemMeio = input.quantity() / 2;
-    u_int64_t pageIndex = itemMeio / PAGE_SIZE;
+    uint64_t const itemMeio = input.quantity() / 2;
+    u_int64_t const pageIndex = itemMeio / PAGE_SIZE;
 
-    u_int64_t offsetNaPag =
+    u_int64_t const offsetNaPag =
         itemMeio % PAGE_SIZE;  // item central da página do meio
     std::array<Item, PAGE_SIZE> page;
     page = input.GetPageAt(pageIndex);

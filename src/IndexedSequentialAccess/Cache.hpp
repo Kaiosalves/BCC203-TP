@@ -122,7 +122,7 @@ private:
      * @param input Arquivo de dados de entrada.
      * @param cachePath Caminho final onde o arquivo de cache será gravado.
      */
-    void BuildCache(File& input, const std::string& cachePath);
+    static void BuildCache(File& input, const std::string& cachePath);
 
     // 3
     /**

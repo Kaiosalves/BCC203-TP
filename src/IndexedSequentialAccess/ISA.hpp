@@ -19,7 +19,7 @@ public:
      *
      * @param input Ponteiro compartilhado para o arquivo binário de dados.
      */
-    explicit ISA(std::shared_ptr<File> input);
+    explicit ISA(const std::shared_ptr<File>& input);
 
     /**
      * @brief Destrutor padrão da classe ISA.

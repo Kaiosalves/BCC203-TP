@@ -3,8 +3,8 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "File.hpp"
-#include "Item.hpp"
+#include "../File.hpp"
+#include "../Item.hpp"
 
 using namespace Algorithm::IndexedSequentialAccess;
 
@@ -62,15 +62,15 @@ bool Cache::ValidateCache(const File& input) {
     // le e armazena os metadados do disco(tamanho e lastmodification)
     Metadata m;
 
-    if (!this->file_.read((char*)&m, sizeof(Metadata))) {
+    if (!this->file_.read(reinterpret_cast<char*>(&m), sizeof(Metadata))) {
         this->file_.clear();
         return false;
     }
     // variaveis que verificam se o cache tem os mesmos metadados
-    bool sameModificationTime =
+    bool const sameModificationTime =
         (m.lastModification == input.lastModification());
 
-    bool sameSize = (m.size == input.size());
+    bool const sameSize = (m.size == input.size());
 
     // retorna verdadeiro se eles tem os mesmos metadados, falso se nao
     return sameModificationTime && sameSize;
@@ -78,11 +78,15 @@ bool Cache::ValidateCache(const File& input) {
 
 bool Cache::TryLoadExistingCache(const std::string& cachePath,
                                  const File& input) {
-    if (!std::filesystem::exists(cachePath)) return false;
+    if (!std::filesystem::exists(cachePath)) {
+        return false;
+    }
 
     this->file_.open(cachePath, std::ios::binary);
 
-    if (!this->file_.is_open()) return false;
+    if (!this->file_.is_open()) {
+        return false;
+    }
 
     if (!this->ValidateCache(input)) {
         this->file_.close();
@@ -106,7 +110,7 @@ std::optional<Cache::Entry> Cache::Search(int key) {
     this->file_.seekg(0, std::ifstream::end);
     auto const fileSize = this->file_.tellg();
 
-    uint64_t const sizeInBytes = static_cast<uint64_t>(fileSize);
+    auto const sizeInBytes = static_cast<uint64_t>(fileSize);
 
     if (sizeInBytes < sizeof(Metadata)) {
         return std::nullopt;
@@ -126,13 +130,13 @@ std::optional<Cache::Entry> Cache::Search(int key) {
 
     // loop de busca
     while (lower <= higher) {
-        int64_t mid = lower + (higher - lower) / 2;
+        int64_t const mid = lower + ((higher - lower) / 2);
         // deslocamento para a pag intermediaria
         std::streampos const offset = sizeof(Metadata) + (mid * sizeof(Entry));
         this->file_.seekg(offset, std::ifstream::beg);
 
         Entry entry;
-        this->file_.read((char*)&entry, sizeof(Entry));
+        this->file_.read(reinterpret_cast<char*>(&entry), sizeof(Entry));
 
         if (entry.key <= key) {
             result = entry;

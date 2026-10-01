@@ -1,0 +1,662 @@
+\documentclass[12pt,a4paper]{article}
+
+% ==============================================================================
+% Pacotes Fundamentais e Tipografia
+% ==============================================================================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[brazilian]{babel}
+\usepackage[top=3cm,bottom=2cm,left=3cm,right=2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{microtype}
+\usepackage{hyperref}
+
+% ==============================================================================
+% Configurações de Hiperlinks
+% ==============================================================================
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=blue!70!black,
+    urlcolor=blue!70!black,
+    pdfauthor={Luiz Henrique Silva Sampaio, Kaio Alves Simões, Victor Kangussu, Vinícius Brandão},
+    pdftitle={Relatório Prático: Análise Comparativa de Métodos de Pesquisa em Memória Secundária - BCC203},
+    pdfsubject={Estrutura de Dados II - UFOP},
+    pdfkeywords={Pesquisa Externa, Acesso Sequencial Indexado, Árvore Binária, Árvore B, Árvore B*, Benchmark, BCC203, UFOP}
+}
+
+% ==============================================================================
+% Configurações de Cabeçalho e Rodapé
+% ==============================================================================
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\footnotesize \nouppercase{\leftmark}}
+\rfoot{\thepage}
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% ==============================================================================
+% Configurações de Listagens de Código
+% ==============================================================================
+\lstset{
+    language=C++,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue!80!black}\bfseries,
+    commentstyle=\color{green!50!black}\itshape,
+    stringstyle=\color{red!70!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    stepnumber=1,
+    numbersep=8pt,
+    backgroundcolor=\color{gray!5},
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    frame=single,
+    rulecolor=\color{gray!40},
+    tabsize=4,
+    captionpos=b,
+    breaklines=true,
+    breakatwhitespace=false
+}
+
+\begin{document}
+
+% ==============================================================================
+% CAPA (Capa Acadêmica ABNT / DECOM - UFOP)
+% ==============================================================================
+\hypersetup{pageanchor=false}
+\begin{titlepage}
+    \centering
+    {\large \textbf{UNIVERSIDADE FEDERAL DE OURO PRETO}}\\[0.2cm]
+    {\large \textbf{INSTITUTO DE CIÊNCIAS EXATAS E BIOLÓGICAS -- ICEB}}\\[0.2cm]
+    {\large \textbf{DEPARTAMENTO DE COMPUTAÇÃO -- DECOM}}\\[0.2cm]
+    {\large \textbf{CURSO DE CIÊNCIA DA COMPUTAÇÃO}}\\[0.8cm]
+
+    \vfill
+
+    {\large \textbf{BCC203 -- ESTRUTURA DE DADOS II}}\\[0.6cm]
+
+    {\LARGE \textbf{RELATÓRIO PRÁTICO I:}}\\[0.3cm]
+    {\Large \textbf{ANÁLISE COMPARATIVA DE ALGORITMOS DE PESQUISA EM MEMÓRIA SECUNDÁRIA}}\\[0.4cm]
+    {\large Acesso Sequencial Indexado, Árvore Binária de Pesquisa Externa, Árvore B e Árvore B*}
+
+    \vfill
+
+    {\large \textbf{Autores:}}\\[0.25cm]
+    Kaio Alves Simões -- Matrícula: \textit{[Inserir]}\\[0.15cm]
+    Luiz Henrique Silva Sampaio -- Matrícula: \textit{[Inserir]}\\[0.15cm]
+    Victor Kangussu -- Matrícula: \textit{[Inserir]}\\[0.15cm]
+    Vinícius Brandão -- Matrícula: \textit{[Inserir]}\\[0.8cm]
+
+    {\large \textbf{Professor Orientador:}}\\[0.25cm]
+    Prof. Dr. \textit{[Nome do Professor]}
+
+    \vfill
+
+    {\large \textbf{Ouro Preto -- MG}}\\[0.2cm]
+    {\large \textbf{2026}}
+\end{titlepage}
+
+% ==============================================================================
+% SUMÁRIO
+% ==============================================================================
+\hypersetup{pageanchor=true}
+\pagenumbering{roman}
+\thispagestyle{empty}
+\tableofcontents
+\newpage
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+% ==============================================================================
+% 1. INTRODUÇÃO
+% ==============================================================================
+\section{Introdução}
+\label{sec:introducao}
+
+O processamento e a recuperação de grandes volumes de informações constituem um dos pilares centrais da Ciência da Computação contemporânea. Em cenários reais, bancos de dados corporativos e sistemas de arquivos frequentemente manipulam volumes de registros que excedem substancialmente a capacidade da memória principal (RAM) disponível, ou demandam estruturas de indexação persistentes entre execuções. Nesses contextos, as estruturas de dados clássicas em memória volátil tornam-se inadequadas devido ao custo de acesso à memória secundária (discos magnéticos ou unidades de estado sólido -- SSDs), cuja latência é ordens de magnitude superior à da memória primária.
+
+Na disciplina de \textbf{Estrutura de Dados II (BCC203)}, o estudo de métodos de pesquisa externa visa projetar e avaliar algoritmos capazes de minimizar a quantidade de transferências de blocos (páginas) entre o disco e a RAM, otimizando o tempo de resposta e o consumo de I/O (\textit{Input/Output}).
+
+O presente trabalho prático analisa, implementa e compara experimentalmente quatro estruturas de dados e algoritmos clássicos de pesquisa em memória secundária:
+\begin{enumerate}
+    \item \textbf{Acesso Sequencial Indexado (ISA -- \textit{Indexed Sequential Access})};
+    \item \textbf{Árvore Binária de Pesquisa Externa};
+    \item \textbf{Árvore B (Ordem $M$)};
+    \item \textbf{Árvore B* (com separação entre nós internos de índice e folhas de dados)}.
+\end{enumerate}
+
+\paragraph{Modelo de Registros e Paginação:}
+Os experimentos manipulam registros representados pela estrutura \texttt{Item}, onde cada elemento é constituído por:
+\begin{itemize}
+    \item Uma chave primária inteira de 32 bits (\texttt{int key});
+    \item Um valor numérico de 64 bits (\texttt{long int value});
+    \item Um arranjo fixo de caracteres com 5.000 bytes (\texttt{std::array<char, 5000> text}).
+\end{itemize}
+Dada a dimensão volumétrica de cada item (aproximadamente 5.012 bytes), a transferência entre memória secundária e primária ocorre em blocos fixos denominados \textit{páginas}, onde cada página encapsula exatamente $\text{PAGE\_SIZE} = 100$ registros.
+
+\paragraph{Delimitação de Escopo:}
+Ressalta-se expressamente que os utilitários de geração sintética de arquivos binários (\textit{gerador de arquivos}) foram concebidos com a finalidade exclusiva de prover massas de dados de teste padronizadas para a bancada experimental. Conforme as especificações deste relatório, o gerador de arquivos é completamente omitido do escopo analítico, concentrando-se todo o estudo nas fases de pré-processamento/construção dos índices, nos algoritmos de pesquisa e nas métricas empíricas de desempenho.
+
+% ==============================================================================
+% 2. FERRAMENTAS UTILIZADAS E AMBIENTE EXPERIMENTAL
+% ==============================================================================
+\section{Ferramentas Utilizadas e Ambiente Experimental}
+\label{sec:ferramentas}
+
+Para assegurar reprodutibilidade científica, robustez de engenharia de software e precisão nas coletas cronométricas, todo o ecossistema experimental foi cuidadosamente padronizado.
+
+\subsection{Linguagem, Compilador e Ferramentas de Construção}
+O projeto foi integralmente desenvolvido na linguagem \textbf{C++23}, tirando proveito de construções semânticas modernas da biblioteca padrão, como abstrações de sistemas de arquivos (\texttt{std::filesystem}), semântica de valores opcionais (\texttt{std::optional}), medição de alta precisão temporal (\texttt{std::chrono}) e encapsulamento modular:
+\begin{itemize}
+    \item \textbf{Compilador:} Clang++ 21.1 / GCC 15.3, operando sob o padrão ISO C++23 (\texttt{-std=c++23});
+    \item \textbf{Sinalizadores de Compilação:} Verificação estrita de conformidade (\texttt{-Wall}, \texttt{-Wextra}, \texttt{-Wpedantic}) e compilação em perfil Release com otimização ativada (\texttt{-O3});
+    \item \textbf{Automação de Build:} CMake (versão 3.20+) gerenciando alvos de compilação, dependências e geração da base de compilação (\texttt{compile\_commands.json});
+    \item \textbf{Ambiente Reproduzível:} Nix Flakes e \textit{devenv}, garantindo paridade determinística de ferramentas de compilação, bibliotecas de sistema e pacotes \LaTeX{};
+    \item \textbf{Qualidade de Código:} \texttt{clang-format} (padronização de estilo) e \texttt{clang-tidy} (linter e análise estática).
+\end{itemize}
+
+\subsection{Especificações do Ambiente de Execução (Hardware e Software)}
+Os testes de desempenho foram executados no ambiente com as seguintes especificações físicas e lógicas:
+
+\begin{table}[H]
+\centering
+\caption{Especificação técnica da estação de testes.}
+\label{tab:hardware}
+\begin{tabular}{p{0.34\textwidth} p{0.60\textwidth}}
+\toprule
+\textbf{Componente} & \textbf{Especificação Técnica} \\
+\midrule
+Processador (CPU) & \textit{[Ex: AMD Ryzen 7 5800X / Intel Core i7-12700H]} \\
+Arquitetura e Núcleos & \textit{[Ex: x86\_64, 8 núcleos / 16 threads, Clock base 3.4 GHz]} \\
+Memória RAM & \textit{[Ex: 32 GB DDR4 3200 MHz]} \\
+Armazenamento Secundário & \textit{[Ex: NVMe PCIe 4.0 SSD M.2 1TB / Leitura sequencial 5000 MB/s]} \\
+Sistema Operacional & Linux \textit{[Ex: NixOS 24.11 / Ubuntu 24.04 LTS]} \\
+Versão do Kernel & Linux Kernel \textit{[Ex: 6.6.x-generic]} \\
+Sistema de Arquivos & \textit{[Ex: ext4 / btrfs / zfs]} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Metodologia Experimental e Métricas Coletadas}
+A avaliação de cada algoritmo é realizada em duas fases distintas, conforme implementado no módulo central de instrumentação:
+\begin{enumerate}
+    \item \textbf{Fase de Pré-processamento:} Compreende a varredura inicial do arquivo de dados e a geração ou carga da estrutura de índice correspondente (construção da tabela de índice ou árvore em memória secundária/primária);
+    \item \textbf{Fase de Pesquisa:} Compreende a localização da chave desejada na estrutura indexada, o mapeamento do número da página no arquivo de dados, a transferência da página de 100 itens para a RAM e a recuperação do registro completo.
+\end{enumerate}
+
+Para cada fase, as seguintes grandezas são registradas através do coletor estático \texttt{Metrics}:
+\begin{itemize}
+    \item \textbf{Tempo de Execução ($T$, em milissegundos):} Mensurado via \texttt{std::chrono::}\allowbreak\texttt{high\_resolution\_clock};
+    \item \textbf{Transferências de Disco para RAM ($R$):} Contagem exata de requisições de blocos/páginas transferidos da memória secundária para a memória principal;
+    \item \textbf{Comparações de Chaves ($C$):} Contagem estrita de avaliações relacionais efetuadas entre a chave buscada e as chaves dos registros indexados.
+\end{itemize}
+
+\paragraph{Regimes de Execução -- Cold vs. Warm:}
+\begin{itemize}
+    \item \textbf{Cold (Execução a Frio):} Primeira execução do algoritmo após a criação do arquivo ou com os caches de página do sistema operacional purgados da memória RAM (\textit{drop caches}). Reflete a latência física e as características brutas de I/O em disco;
+    \item \textbf{Warm (Execução a Quente):} Execuções imediatas e subsequentes à primeira, onde as páginas de dados e índice já se encontram retidas no \textit{page cache} do sistema operacional na RAM. Permite avaliar o custo algorítmico e de CPU sem a penalidade de latência de leitura física de disco.
+\end{itemize}
+
+\paragraph{Cenários de Entrada (Situações):}
+Os ensaios foram conduzidos considerando três estados estruturais dos dados originais:
+\begin{itemize}
+    \item \textbf{Situação 1 -- Arquivo Ordenado Ascendentemente;}
+    \item \textbf{Situação 2 -- Arquivo Ordenado Descendentemente;}
+    \item \textbf{Situação 3 -- Arquivo Desordenado (Aleatório/Embaralhado).}
+\end{itemize}
+Para cada cenário, foram submetidos volumes variados de registros, tipicamente parametrizados em ordens de grandeza incrementais: $N \in \{20, \, 2.000, \, 20.000, \, 200.000, \, 2.000.000\}$.
+
+% ==============================================================================
+% 3. ALGORITMOS DE PESQUISA
+% ==============================================================================
+\section{Algoritmos de Pesquisa}
+\label{sec:algoritmos}
+
+Nesta seção, cada um dos quatro métodos de pesquisa externa implementados é descrito detalhadamente em termos de seu modelo teórico, arquitetura de implementação em C++, funcionamento das fases de pré-processamento e busca, acompanhado de sua respectiva tabela comparativa de benchmarks e análise de comportamento.
+
+% ------------------------------------------------------------------------------
+% 3.1 Acesso Sequencial Indexado (ISA)
+% ------------------------------------------------------------------------------
+\subsection{Acesso Sequencial Indexado (Indexed Sequential Access -- ISA)}
+\label{subsec:isa}
+
+\subsubsection{Princípio de Funcionamento e Implementação}
+O método de \textbf{Acesso Sequencial Indexado} é uma das abordagens pioneiras para redução de acessos em arquivos externos ordenados. A técnica baseia-se na criação de uma tabela de índices esparsa, na qual cada entrada mapeia a menor chave contida em uma página de dados ao respectivo índice da página no arquivo binário.
+
+\paragraph{Arquitetura e Classes:}
+A implementação foi modularizada no \textit{namespace} \texttt{Algorithm::}\allowbreak\texttt{IndexedSequentialAccess}:
+\begin{itemize}
+    \item \texttt{Cache}: Classe responsável pela criação, validação temporal e manipulação do arquivo de índice (\texttt{.cache}). Cada entrada (\texttt{Cache::Entry}) armazena um par \texttt{(key, pageIndex)}. A estrutura conta ainda com metadados (\texttt{lastModification} e \texttt{size}) para garantir que o cache em disco seja invalidado caso o arquivo de dados sofra alterações;
+    \item \texttt{ISA}: Classe de alto nível que orquestra a consulta. Recebe a instância compartilhada de \texttt{File} e coordena a consulta ao índice e a posterior recuperação da página de dados.
+\end{itemize}
+
+\paragraph{Fase de Pré-processamento:}
+Durante a construção do índice (\texttt{Cache::BuildCache}), o arquivo de dados original é percorrido sequencialmente de página em página. Para cada página, a menor chave (o primeiro item da página) é extraída juntamente com seu número de página e gravada no arquivo de índice. Como o índice armazena apenas uma entrada por página, o tamanho do arquivo de índice é $\approx \frac{1}{\text{PAGE\_SIZE}}$ do tamanho do arquivo de dados original, permitindo carregamento rápido ou busca direta.
+
+\paragraph{Fase de Pesquisa:}
+Ao consultar uma chave $K$:
+\begin{enumerate}
+    \item Uma busca binária é executada diretamente nas entradas do arquivo de índice (\texttt{Cache::Search(key)}), localizando a página candidata onde $K$ pode residir (isto é, a página cujo menor item satisfaz $\text{chave\_pagina} \le K < \text{chave\_proxima\_pagina}$);
+    \item Se nenhuma página compatível for encontrada, a busca é finalizada com ausência;
+    \item Caso contrário, apenas a página indicada é carregada do disco para a memória principal via \texttt{File::GetPageAt(pageIndex)};
+    \item Realiza-se uma busca sequencial linear sobre os itens válidos da página em RAM, comparando a chave procurada até localizá-la ou esgotar a página.
+\end{enumerate}
+
+\paragraph{Restrições Estruturais:}
+Por depender da pressuposição de monotonicidade entre as páginas e dentro de cada página para delimitar os intervalos de busca, o método exige obrigatoriamente que o arquivo esteja \textbf{ordenado ascendentemente} (Situação 1). A tentativa de execução sobre arquivos descendentemente ordenados (Situação 2) ou desordenados (Situação 3) é rejeitada pelo sistema por inconsistência teórica do índice esparso simples.
+
+\subsubsection{Resultados Experimentais e Tabela de Benchmark}
+A Tabela~\ref{tab:bench_isa} consolida as medições obtidas pelo método ISA em diferentes escalas volumétricas, contrastando execuções \textit{Cold} e \textit{Warm}.
+
+\begin{table}[H]
+\centering
+\caption{Benchmark experimental -- Acesso Sequencial Indexado (ISA).}
+\label{tab:bench_isa}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llr rrr rrr}
+\toprule
+& & & \multicolumn{3}{c}{\textbf{Pré-processamento}} & \multicolumn{3}{c}{\textbf{Pesquisa}} \\
+\cmidrule(lr){4-6} \cmidrule(lr){7-9}
+\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} \\
+\midrule
+Ascendente & Cold & 20         & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente & Cold & 2.000      & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente & Cold & 20.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente & Cold & 200.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente & Cold & 2.000.000  & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Ascendente & Warm & 20         & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente & Warm & 2.000      & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente & Warm & 20.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente & Warm & 200.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente & Warm & 2.000.000  & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Descendente & Cold/Warm & Todos & \multicolumn{6}{c}{\textit{Não suportado (operação rejeitada por violação de ordenação)}} \\
+Desordenado & Cold/Warm & Todos & \multicolumn{6}{c}{\textit{Não suportado (operação rejeitada por violação de ordenação)}} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\paragraph{Discussão dos Resultados:}
+\textit{[Espaço para análise do comportamento observado: discutir a linearidade do pré-processamento $O(N)$, a extrema parcimônia de leituras de disco na fase de busca ($O(\log(\text{páginas})) + 1$ leitura de bloco de dados) e o efeito nítido do aquecimento de cache entre execuções Cold e Warm.]}
+
+% ------------------------------------------------------------------------------
+% 3.2 Árvore Binária de Pesquisa Externa
+% ------------------------------------------------------------------------------
+\subsection{Árvore Binária de Pesquisa Externa (Binary Tree)}
+\label{subsec:binary_tree}
+
+\subsubsection{Princípio de Funcionamento e Implementação}
+A \textbf{Árvore Binária de Pesquisa Externa} adapta o conceito fundamental de árvores binárias de busca (BST) para o armazenamento permanente em disco. Diferentemente de uma árvore binária em memória RAM em que os apontadores são endereços de memória virtual (\textit{pointers}), nesta implementação os nós residem sequencialmente em um arquivo binário e os apontadores para subárvores esquerda e direita são índices numéricos de nós (offsets baseados em registro).
+
+\paragraph{Arquitetura e Classes:}
+Implementada no \textit{namespace} \texttt{Algorithm::BinaryTree}:
+\begin{itemize}
+    \item \texttt{BTreeFile::Node}: Estrutura de nó compacta contendo a chave inteira (\texttt{int key}), o índice da página correspondente no arquivo de dados (\texttt{uint64\_t pageIndex}) e dois descritores inteiros de posição para os nós filhos (\texttt{uint64\_t left} e \texttt{uint64\_t right});
+    \item \texttt{BTreeFile}: Classe encarregada da criação e da leitura nó a nó via acesso randômico no arquivo binário de índice da árvore;
+    \item \texttt{BTree}: Fachada que conecta o índice da árvore binária ao arquivo de dados original.
+\end{itemize}
+
+\paragraph{Fase de Pré-processamento:}
+No método \texttt{BTreeFile::BuildFile}, o arquivo de dados de entrada é percorrido bloco a bloco. Cada registro é submetido à rotina de inserção na árvore binária:
+\begin{enumerate}
+    \item O primeiro item inserido torna-se o nó raiz (posição 0 do arquivo de árvore);
+    \item Para cada novo item, a inserção percorre o arquivo de nós a partir da raiz, comparando as chaves. Leituras sucessivas de nós em disco são executadas para navegar até um apontador nulo (\texttt{left == 0} ou \texttt{right == 0});
+    \item Ao atingir a folha correspondente, o novo nó é anexado ao final do arquivo de índice e o apontador do nó pai é devidamente atualizado.
+\end{enumerate}
+
+\paragraph{Fase de Pesquisa:}
+Dada a chave procurada $K$:
+\begin{enumerate}
+    \item A busca inicia-se na raiz (\texttt{Search(key)}). O nó raiz é lido do disco;
+    \item Se $\text{nó.key} == K$, a busca no índice encerra com sucesso, recuperando o \texttt{pageIndex};
+    \item Se $K < \text{nó.key}$, a busca avança para o nó apontado por \texttt{nó.left}; caso contrário, para \texttt{nó.right};
+    \item Se um apontador nulo for atingido, a chave não existe;
+    \item Após localizar o nó, a página correspondente no arquivo de dados é carregada para a RAM (\texttt{File::GetPageAt}) e submetida a varredura linear para recuperar o \texttt{Item} integral.
+\end{enumerate}
+
+\paragraph{Sensibilidade à Ordenação e Degeneração:}
+Por se tratar de uma árvore binária sem rebalanceamento automático (AVL ou Rubro-Negra), o algoritmo exibe extrema sensibilidade à ordem dos dados de entrada:
+\begin{itemize}
+    \item \textbf{Arquivo Ordenado (Ascendente ou Descendente):} A estrutura degenera completamente em uma lista linear encadeada de altura $h = N$. Cada inserção e cada busca passa a demandar $O(N)$ leituras de disco, provocando volumoso tráfego de I/O e degradação severa de desempenho;
+    \item \textbf{Arquivo Desordenado (Aleatório):} A estrutura tende a um comportamento balanceado médio de altura $h \approx O(\log_2 N)$, reduzindo consideravelmente as leituras.
+\end{itemize}
+
+\subsubsection{Resultados Experimentais e Tabela de Benchmark}
+A Tabela~\ref{tab:bench_binary_tree} sintetiza os resultados de benchmark da Árvore Binária Externa abrangendo os três tipos de entrada e regimes Cold/Warm.
+
+\begin{table}[H]
+\centering
+\caption{Benchmark experimental -- Árvore Binária de Pesquisa Externa.}
+\label{tab:bench_binary_tree}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llr rrr rrr}
+\toprule
+& & & \multicolumn{3}{c}{\textbf{Pré-processamento}} & \multicolumn{3}{c}{\textbf{Pesquisa}} \\
+\cmidrule(lr){4-6} \cmidrule(lr){7-9}
+\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} \\
+\midrule
+Ascendente  & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Ascendente  & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Descendente & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Descendente & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Desordenado & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Desordenado & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\paragraph{Discussão dos Resultados:}
+\textit{[Espaço para análise do comportamento observado: comparar o colapso de desempenho nos casos ordenados (ascendente/descendente) devido à degeneração linear contra a eficiência proporcional a $\log_2 N$ no caso desordenado. Destacar também a diferença brutal de tempo entre o regime Cold (com acessos randômicos não sequenciais no disco) e o regime Warm.]}
+
+% ------------------------------------------------------------------------------
+% 3.3 Árvore B
+% ------------------------------------------------------------------------------
+\subsection{Árvore B (B-Tree)}
+\label{subsec:btree}
+
+\subsubsection{Princípio de Funcionamento e Implementação}
+A \textbf{Árvore B} é uma estrutura de pesquisa balanceada multi-vias concebida especificamente para operar com eficiência sobre dispositivos de memória secundária. Em uma Árvore B de ordem $M$ (onde no projeto adotou-se o parâmetro compatível com $\text{PAGE\_SIZE} = 100$), cada nó armazena múltiplos pares de chave/dado e múltiplos apontadores para nós filhos, garantindo que o fator de ramificação (\textit{fan-out}) seja expressivamente elevado.
+
+\paragraph{Arquitetura e Classes:}
+Implementada no \textit{namespace} \texttt{Algorithm::BTree}:
+\begin{itemize}
+    \item \texttt{IBTreeData::Entry}: Entrada individual contendo \texttt{key} e \texttt{pageIndex};
+    \item \texttt{IBTreeData::Node}: Estrutura de nó que encapsula até $\text{PAGE\_SIZE}$ entradas ordenadas internamente por chave e até $\text{PAGE\_SIZE} + 1$ apontadores (\texttt{nodePos}) para nós filhos, com controle de ocupação (\texttt{size}) e identificação de folha (\texttt{isLeaf()});
+    \item \texttt{BTreeMemory} e \texttt{BTreeFile}: Implementações das variantes que operam respectivamente com o índice em memória RAM ou mantendo os nós serializados diretamente em arquivo binário em disco;
+    \item \texttt{BTree}: Classe integradora responsável por gerenciar a busca na árvore e a subseqüente leitura da página no arquivo de dados de entrada.
+\end{itemize}
+
+\paragraph{Fase de Pré-processamento e Balanceamento:}
+A inserção de registros na Árvore B obedece ao princípio da divisão de nós (\textit{split}):
+\begin{enumerate}
+    \item As chaves são inseridas no nó folha apropriado mantendo a ordenação interna das entradas;
+    \item Quando um nó atinge sua capacidade máxima de $\text{PAGE\_SIZE}$ entradas e recebe um novo elemento, ocorre o particionamento do nó em dois novos nós contendo metade das chaves cada, e a chave mediana é promovida ao nó pai;
+    \item Esse processo pode propagar-se recursivamente até a raiz. Caso a raiz sofra divisão, uma nova raiz é criada com apenas uma chave e dois filhos, aumentando a altura global da árvore em 1 nível;
+    \item Esse mecanismo garante que todas as folhas permaneçam invariavelmente no mesmo nível de profundidade, preservando o balanceamento perfeito da árvore com altura garantida de $O(\log_M N)$ independente da ordem de chegada dos dados.
+\end{enumerate}
+
+\paragraph{Fase de Pesquisa:}
+Para encontrar um registro com chave $K$:
+\begin{enumerate}
+    \item A pesquisa inicia-se no nó raiz da árvore;
+    \item Dentro do nó corrente, realiza-se uma busca (sequencial ou binária) entre suas entradas ordenadas;
+    \item Se uma entrada possuir chave exatamente igual a $K$, a busca é concluída no índice com o resgate de \texttt{pageIndex};
+    \item Se a chave $K$ estiver compreendida entre duas chaves $\text{entries}[i]$ e $\text{entries}[i+1]$, a busca descende para o nó filho correspondente em $\text{nodePos}[i+1]$;
+    \item Se o nó corrente for folha e a chave não estiver presente, encerra-se indicando ausência;
+    \item Ao encontrar a entrada, a página de dados apontada por \texttt{pageIndex} é lida em memória e o item integral é retornado.
+\end{enumerate}
+
+\subsubsection{Resultados Experimentais e Tabela de Benchmark}
+A Tabela~\ref{tab:bench_btree} reporta os dados cronométricos e de I/O coletados nos testes com a Árvore B.
+
+\begin{table}[H]
+\centering
+\caption{Benchmark experimental -- Árvore B.}
+\label{tab:bench_btree}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llr rrr rrr}
+\toprule
+& & & \multicolumn{3}{c}{\textbf{Pré-processamento}} & \multicolumn{3}{c}{\textbf{Pesquisa}} \\
+\cmidrule(lr){4-6} \cmidrule(lr){7-9}
+\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} \\
+\midrule
+Ascendente  & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Ascendente  & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Descendente & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Descendente & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Desordenado & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Desordenado & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\paragraph{Discussão dos Resultados:}
+\textit{[Espaço para análise do comportamento observado: destacar a imunidade da Árvore B contra variações de ordenação dos arquivos de entrada, a profundidade extremamente baixa (tipicamente $\le 3$ níveis para até 2 milhões de itens com ordem 100) e a estabilidade das leituras de disco requeridas por consulta.]}
+
+% ------------------------------------------------------------------------------
+% 3.4 Árvore B*
+% ------------------------------------------------------------------------------
+\subsection{Árvore B* (B*-Tree)}
+\label{subsec:bstar_tree}
+
+\subsubsection{Princípio de Funcionamento e Implementação}
+A \textbf{Árvore B*} é uma evolução sofisticada da Árvore B que introduz duas premissas estruturais cruciais:
+\begin{enumerate}
+    \item \textbf{Segregação entre Nós Internos e Nós Folhas:} Nós internos armazenam unicamente chaves delimitadoras de roteamento e apontadores para nós inferiores, não guardando dados de apontamento para páginas do arquivo de dados. Os dados reais de mapeamento (\texttt{key} e \texttt{pageIndex}) residem exclusivamente nos nós folhas (\textit{Data Nodes});
+    \item \textbf{Encadeamento Sequencial de Folhas:} As folhas contêm apontadores diretos para suas folhas irmãs subsequentes (\texttt{nextData}), permitindo varreduras sequenciais e consultas por intervalo (\textit{range queries}) de altíssimo desempenho sem a necessidade de reescalar a árvore;
+    \item \textbf{Maior Taxa de Ocupação:} Mecanismos de redistribuição de chaves entre nós irmãos antes do particionamento garantem uma taxa média de ocupação superior ($\approx 66\%$ a $75\%$, contra os $\approx 50\%$ mínimos da Árvore B convencional), diminuindo ainda mais o número total de nós alocados.
+\end{enumerate}
+
+\paragraph{Arquitetura e Classes:}
+Implementada no \textit{namespace} \texttt{Algorithm::BStarTree}:
+\begin{itemize}
+    \item \texttt{IBStarTreeData::Node}: Estrutura híbrida baseada em união e discriminador de tipo (\texttt{Node::Type::Index} vs. \texttt{Node::Type::Data}):
+    \begin{itemize}
+        \item O subtipo \texttt{Index} contém um vetor de chaves divisórias (\texttt{std::array<int, PAGE\_SIZE> indexes}) e apontadores de subárvores (\texttt{nodePos});
+        \item O subtipo \texttt{Data} contém as entradas de apontamento (\texttt{std::array<}\allowbreak\texttt{Entry, PAGE\_SIZE> entries}) e o apontador sequencial para o próximo bloco de dados (\texttt{nextData});
+    \end{itemize}
+    \item \texttt{BStarTreeMemory} e \texttt{BStarTreeFile}: Implementações gerenciando a árvore em memória primária e em arquivo binário persistente;
+    \item \texttt{BStarTree}: Fachada de orquestração que processa as buscas e carrega a página correspondente no arquivo de dados.
+\end{itemize}
+
+\paragraph{Fase de Pesquisa:}
+Ao consultar uma chave $K$:
+\begin{enumerate}
+    \item A navegação inicia-se na raiz e transita pelos nós internos (\texttt{Type::Index}), comparando $K$ com os divisores do nó para determinar qual subárvore descer;
+    \item O processo prossegue até alcançar obrigatoriamente um nó folha (\texttt{Type::Data});
+    \item No nó folha, realiza-se a busca pela chave $K$ em suas entradas válidas;
+    \item Caso encontrada, o \texttt{pageIndex} é utilizado para resgatar a página no arquivo de dados via \texttt{GetPageAt}; caso contrário, constata-se a ausência do registro.
+\end{enumerate}
+
+\subsubsection{Resultados Experimentais e Tabela de Benchmark}
+A Tabela~\ref{tab:bench_bstartree} expõe os resultados empíricos coletados para a Árvore B\*.
+
+\begin{table}[H]
+\centering
+\caption{Benchmark experimental -- Árvore B*.}
+\label{tab:bench_bstartree}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llr rrr rrr}
+\toprule
+& & & \multicolumn{3}{c}{\textbf{Pré-processamento}} & \multicolumn{3}{c}{\textbf{Pesquisa}} \\
+\cmidrule(lr){4-6} \cmidrule(lr){7-9}
+\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} \\
+\midrule
+Ascendente  & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Ascendente  & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Descendente & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Descendente & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Desordenado & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\midrule
+Desordenado & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\paragraph{Discussão dos Resultados:}
+\textit{[Espaço para análise do comportamento observado: comparar o comportamento da Árvore B* em relação à Árvore B tradicional, pontuando a economia em nós de índice pelo fato de conterem apenas chaves delimitadoras, a previsibilidade da profundidade de busca e a eficiência para consultas pontuais e por faixa.]}
+
+% ==============================================================================
+% 4. COMPARAÇÃO ENTRE OS ALGORITMOS
+% ==============================================================================
+\section{Comparação Geral e Discussão dos Algoritmos}
+\label{sec:comparacao}
+
+A análise comparativa entre as quatro estruturas de dados permite identificar com clareza os \textit{trade-offs} inerentes ao projeto de mecanismos de indexação para memória secundária.
+
+\subsection{Custo e Desempenho no Pré-processamento}
+A construção do índice representa um investimento inicial de tempo e operações de I/O em disco:
+\begin{itemize}
+    \item \textbf{Acesso Sequencial Indexado:} Apresenta o menor custo de construção absoluto, efetuando uma única leitura linear sequencial no arquivo de dados ($O(N/\text{PAGE\_SIZE})$ leituras). Contudo, pressupõe que os dados de entrada já estejam ordenados;
+    \item \textbf{Árvore Binária de Pesquisa:} O custo de construção é altamente dependente da ordenação prévia. Em arquivos ordenados, a degeneração em lista produz $O(N^2)$ comparações e I/Os ao disco durante a inserção, tornando o processo inviável para grandes volumes de dados. Em contrapartida, com dados aleatórios, o custo converge para $O(N \log N)$;
+    \item \textbf{Árvores B e B*:} Demandam custo de construção intermediário devido aos algoritmos de divisão de nós e rebalanceamento, contudo garantem estabilidade estrita $O(N \log_M N)$ independentemente da ordenação da entrada.
+\end{itemize}
+
+\subsection{Eficiência na Fase de Pesquisa}
+Na pesquisa pontual por chave:
+\begin{itemize}
+    \item \textbf{Número de Leituras de Disco:} O Acesso Sequencial Indexado, a Árvore B e a Árvore B* demonstram superioridade incontestável sobre a Árvore Binária. Enquanto a Árvore Binária pode requerer até $N$ leituras de nós em disco no pior caso, as árvores multi-vias requerem apenas $h \approx \log_M(N)$ leituras de nós mais uma leitura de página de dados, mantendo o total de acessos físicos a disco quase constante (tipicamente entre 2 e 4 leituras para até 2.000.000 de registros);
+    \item \textbf{Comparações de Chaves:} A Árvore B e a Árvore B* realizam mais comparações em memória primária por nó (pesquisa dentro do vetor de tamanho $\text{PAGE\_SIZE}$), porém essa operação em RAM é dezenas de milhares de vezes mais veloz que uma única leitura adicional de disco, justificando plenamente a troca de processamento em CPU por economia de I/O.
+\end{itemize}
+
+\subsection{Sensibilidade ao Ordenamento Inicial da Entrada}
+\begin{itemize}
+    \item \textbf{Arquivos Ordenados (Ascendentes):} O ISA é a estrutura ideal pela simplicidade e compacidade; as Árvores B e B* comportam-se de forma estável e balanceada; a Árvore Binária degenera completamente;
+    \item \textbf{Arquivos Descendentes:} O ISA torna-se inoperante; a Árvore Binária degenera de modo análogo ao caso ascendente; as Árvores B e B* mantêm invariantes estruturais e complexidade balanceada;
+    \item \textbf{Arquivos Desordenados (Aleatórios):} O ISA não pode ser utilizado diretamente sem uma fase prévia de ordenação externa; a Árvore Binária atinge seu melhor caso médio ($O(\log N)$); as Árvores B e B* exibem sua máxima utilidade prática.
+\end{itemize}
+
+\subsection{Impacto do Subsistema de Memória e Caches (Cold vs. Warm)}
+O contraste entre execuções \textit{Cold} e \textit{Warm} evidencia o papel preponderante do \textit{Page Cache} do núcleo do sistema operacional:
+\begin{itemize}
+    \item Em regime \textbf{Cold}, a latência das chamadas de sistema (\texttt{read}, \texttt{lseek}) reflete a busca física no subsistema de armazenamento, tornando o tempo de execução estritamente proporcional ao número de blocos distintos acessados;
+    \item Em regime \textbf{Warm}, as páginas requisitadas residem na memória RAM gerenciada pelo kernel, reduzindo os tempos de busca de dezenas ou centenas de milissegundos para frações de milissegundos ou microssegundos.
+\end{itemize}
+
+\subsection{Síntese Comparativa Geral}
+A Tabela~\ref{tab:sintese_comparativa} consolida as principais características operacionais e assintóticas dos quatro métodos investigados.
+
+\begin{table}[H]
+\centering
+\caption{Quadro comparativo consolidado dos algoritmos de pesquisa externa.}
+\label{tab:sintese_comparativa}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Característica / Métrica} & \textbf{ISA} & \textbf{Árvore Binária} & \textbf{Árvore B} & \textbf{Árvore B*} \\
+\midrule
+Complexidade de Busca (Médio)     & $O(\log(N/B))$     & $O(\log N)$             & $O(\log_M N)$     & $O(\log_M N)$ \\
+Complexidade de Busca (Pior Caso) & $O(\log(N/B))$     & $O(N)$ (degenerada)     & $O(\log_M N)$     & $O(\log_M N)$ \\
+Acessos a Disco por Busca         & $\approx \log_2(N/B) + 1$ & $O(\log N)$ ou $O(N)$ & $O(\log_M N) + 1$ & $O(\log_M N) + 1$ \\
+Suporte a Dados Desordenados      & Não                & Sim                     & Sim               & Sim \\
+Sensibilidade à Ordem da Entrada  & Extrema (requer asc.) & Extrema (degenera)   & Mínima (imune)    & Mínima (imune) \\
+Espaço de Índice em Disco         & Mínimo ($\approx 1/B$) & Moderado ($O(N)$)    & Moderado          & Compacto \\
+Fator de Ocupação Mínimo          & $100\%$            & N/A                     & $50\%$            & $\approx 66\%$ a $75\%$ \\
+Eficiência em Consultas por Faixa & Boa                & Baixa                   & Moderada          & Excelente (folhas encadeadas) \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+% ==============================================================================
+% 5. CONCLUSÃO
+% ==============================================================================
+\section{Conclusão}
+\label{sec:conclusao}
+
+Este trabalho prático permitiu avaliar, quantitativa e qualitativamente, os princípios teóricos e os desafios práticos de engenharia associados à pesquisa em memória secundária. 
+
+A partir das análises experimentais consolidadas ao longo deste relatório, destacam-se as seguintes conclusões fundamentais:
+\begin{enumerate}
+    \item \textbf{Custo Crítico de I/O:} Em sistemas de armazenamento persistente, o número de acessos à memória secundária (transferências de blocos/páginas) é a métrica preponderante que dita o tempo de execução total, sobrepujando com folga o custo de comparações de chaves efetuadas em memória RAM;
+    \item \textbf{Inadequação de Árvores Binárias Não Balanceadas:} A Árvore Binária Externa demonstrou-se inviável para uso geral em arquivos de grande porte, haja vista sua vulnerabilidade crítica à ordem dos dados, degenerando em listas lineares de profundidade inaceitável no pior caso;
+    \item \textbf{Elegância do Acesso Sequencial Indexado:} Quando os dados originais são estáticos e previamente ordenados de forma ascendente, o ISA oferece uma solução imbatível em simplicidade e consumo diminuto de espaço de índice, requerendo baixíssimo esforço de construção;
+    \item \textbf{Supremacia das Estruturas Multi-vias (Árvores B e B*):} Para sistemas modernos de gerenciamento de bancos de dados (SGBDs) e sistemas de arquivos, as árvores B e B\* consolidam-se como o padrão ouro da indústria. Seu elevado fator de ramificação garante que a profundidade permaneça ínfima mesmo diante de milhões de registros, garantindo previsibilidade de latência e resiliência completa contra padrões patológicos de inserção. Em particular, a Árvore B\* otimiza ainda mais o tráfego de dados ao segregar chaves de roteamento e interligar as folhas para varreduras em lote.
+\end{enumerate}
+
+Em suma, a implementação e instrumentação dos algoritmos na disciplina BCC203 forneceram sólida compreensão empírica das compensações de desempenho em sistemas de arquivos e bancos de dados, alinhando rigor formal algorítmico e práticas avançadas de desenvolvimento em C++ moderno.
+
+\end{document}

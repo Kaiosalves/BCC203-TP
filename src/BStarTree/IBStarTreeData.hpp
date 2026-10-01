@@ -56,7 +56,7 @@ public:
          *
          * @return true se o tipo for Data; false caso contrário.
          */
-        // 3
+        // 1
         [[nodiscard]] bool isLeaf() const { return this->type == Type::Data; }
 
         /**

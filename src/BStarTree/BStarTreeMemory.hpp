@@ -75,7 +75,7 @@ private:
      * @return size_t Para nós Data, índice da entrada ou de inserção. Para nós
      *         Index, índice do ponteiro do filho onde a chave deve residir.
      */
-    // 2
+    // 3
     static size_t FindKeyIndex(const Node& node, int key, bool& found);
 
     /**
@@ -84,7 +84,7 @@ private:
      * @param node Nó de dados com espaço disponível (size < PAGE_SIZE).
      * @param entry Entrada a ser inserida.
      */
-    // 2
+    // 3
     static void InsertIntoNonFullDataNode(Node& node, const Entry& entry);
 
     /**
@@ -95,7 +95,7 @@ private:
      * @param key Chave a ser inserida.
      * @param rightChild Índice do filho à direita associado à chave.
      */
-    // 2
+    // 3
     static void InsertIntoNonFullIndexNode(Node& node, int key,
                                            int64_t rightChild);
 
@@ -110,7 +110,7 @@ private:
      * @param createdSiblingIndex Saída contendo o índice do novo nó folha irmão
      * criado.
      */
-    // 2
+    // 3
     void SplitDataNode(uint64_t nodeIndex, const Entry& entry,
                        Entry& promotedEntry, int64_t& createdSiblingIndex);
 
@@ -126,7 +126,7 @@ private:
      * @param createdSiblingIndex Saída contendo o índice do novo nó irmão
      * criado.
      */
-    // 2
+    // 3
     void SplitIndexNode(uint64_t nodeIndex, int key, int64_t rightChildIndex,
                         Entry& promotedEntry, int64_t& createdSiblingIndex);
 
@@ -141,7 +141,7 @@ private:
      * @return true se o nó atual foi dividido e requer inserção no pai; false
      * caso contrário.
      */
-    // 2
+    // 3
     bool InsertInternal(int64_t currentNodeIndex, const Entry& entryToInsert,
                         Entry& promotedEntry, int64_t& newChildIndex);
 
@@ -155,7 +155,7 @@ private:
      * @param pageIndex Índice da página do arquivo de dados onde o item se
      * encontra.
      */
-    // 2
+    // 3
     void InsertItem(const Item& item, uint64_t pageIndex);
 
     /**
@@ -165,7 +165,7 @@ private:
      * @param pageIndex Índice da página de dados.
      * @param itemCount Quantidade de itens válidos na página.
      */
-    // 2
+    // 1
     void InsertPage(const std::array<Item, PAGE_SIZE>& page, uint64_t pageIndex,
                     size_t itemCount);
 
@@ -175,7 +175,7 @@ private:
      *
      * @param input Arquivo de dados de entrada.
      */
-    // 2
+    // 1
     void PopulateTree(File& input);
 };
 }  // namespace Algorithm::BStarTree

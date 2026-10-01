@@ -76,7 +76,7 @@ private:
      * @return size_t Índice da entrada correspondente (se found for true) ou o
      *         índice do ponteiro do filho onde a chave deve residir.
      */
-    // 2
+    // 3
     static size_t FindKeyIndex(const Node& node, int key, bool& found);
 
     /**
@@ -90,7 +90,7 @@ private:
      * @param rightChild Índice para o filho à direita associado à entrada (-1
      * se folha).
      */
-    // 2
+    // 3
     static void InsertIntoNonFullNode(Node& node, const Entry& entry,
                                       int64_t rightChild);
 
@@ -109,7 +109,7 @@ private:
      * @param createdSiblingIndex Saída contendo o índice do novo nó irmão
      * criado.
      */
-    // 2
+    // 3
     void SplitNode(uint64_t nodeIndex, const Entry& entry,
                    int64_t rightChildIndex, Entry& promotedEntry,
                    int64_t& createdSiblingIndex);
@@ -126,7 +126,7 @@ private:
      * @return true se o nó atual foi dividido e requer inserção no pai; false
      * caso contrário.
      */
-    // 2
+    // 3
     bool InsertInternal(int64_t currentNodeIndex, const Entry& entryToInsert,
                         Entry& promotedEntry, int64_t& newChildIndex);
 
@@ -140,7 +140,7 @@ private:
      * @param pageIndex Índice da página do arquivo de dados onde o item se
      * encontra.
      */
-    // 2
+    // 3
     void InsertItem(const Item& item, uint64_t pageIndex);
 
     /**
@@ -150,7 +150,7 @@ private:
      * @param pageIndex Índice da página de dados.
      * @param itemCount Quantidade de itens válidos na página.
      */
-    // 2
+    // 1
     void InsertPage(const std::array<Item, PAGE_SIZE>& page, uint64_t pageIndex,
                     size_t itemCount);
 
@@ -160,7 +160,7 @@ private:
      *
      * @param input Arquivo de dados de entrada.
      */
-    // 2
+    // 1
     void PopulateTree(File& input);
 };
 }  // namespace Algorithm::BTree

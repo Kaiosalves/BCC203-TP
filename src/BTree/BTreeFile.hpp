@@ -109,7 +109,7 @@ private:
      * @param input Arquivo de dados de entrada.
      * @param path Caminho do arquivo a ser criado.
      */
-    // 2
+    // 1
     void BuildFile(File& input, const std::string& path);
 
     /**
@@ -258,7 +258,7 @@ private:
      * @param rootIndex Referência para o índice da raiz.
      * @param lastNodeIndex Referência para o controle de nós no arquivo.
      */
-    // 2
+    // 1
     static void InsertPage(
         std::fstream& file, const std::array<Item, PAGE_SIZE>& page,
         uint64_t pageIndex,  // NOLINT(bugprone-easily-swappable-parameters)
@@ -273,7 +273,7 @@ private:
      * @param rootIndex Referência para o índice da raiz.
      * @param lastNodeIndex Referência para o controle de nós no arquivo.
      */
-    // 2
+    // 1
     static void PopulateTree(std::fstream& file, File& input,
                              int64_t& rootIndex, uint64_t& lastNodeIndex);
 };

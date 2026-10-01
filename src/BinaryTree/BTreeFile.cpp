@@ -1,5 +1,6 @@
 #include "BTreeFile.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 
 #include "../Common.hpp"
@@ -167,8 +168,9 @@ void BTreeFile::InitializeRoot(std::fstream& file, File& input) {
 
 void BTreeFile::InsertPage(std::fstream& file,
                            const std::array<Item, PAGE_SIZE>& page,
-                           uint64_t pageIndex, uint64_t& lastNodeIndex) {
-    for (int i = 0; i < PAGE_SIZE; i++) {
+                           uint64_t pageIndex, size_t itemCount,
+                           uint64_t& lastNodeIndex) {
+    for (size_t i = 0; i < itemCount; i++) {
         InsertItem(file, page[i], pageIndex, lastNodeIndex);
     }
 }
@@ -177,10 +179,14 @@ void BTreeFile::PopulateTree(std::fstream& file, File& input,
                              uint64_t& lastNodeIndex) {
     lastNodeIndex = 0;
     u_int64_t pageIndex = 0;
-    std::array<Item, PAGE_SIZE> page;
-    while (!input.eof()) {
+    std::array<Item, PAGE_SIZE> page{};
+    while (pageIndex * PAGE_SIZE < input.quantity() && !input.eof()) {
         page = input.GetNextPage();
-        InsertPage(file, page, pageIndex, lastNodeIndex);
+        uint64_t const firstItem = pageIndex * PAGE_SIZE;
+        uint64_t const remaining = input.quantity() - firstItem;
+        size_t const itemCount = static_cast<size_t>(
+            std::min(static_cast<uint64_t>(PAGE_SIZE), remaining));
+        InsertPage(file, page, pageIndex, itemCount, lastNodeIndex);
         pageIndex++;
     }
 }

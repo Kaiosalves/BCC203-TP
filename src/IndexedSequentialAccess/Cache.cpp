@@ -13,6 +13,7 @@ Cache::Cache(File& input) {
 
     if (!TryLoadExistingCache(cachePath, input)) {
         BuildCache(input, cachePath);
+        this->file_.open(cachePath, std::ios::binary);
     }
 }
 
@@ -38,12 +39,10 @@ void Cache::BuildCache(File& input, const std::string& cachePath) {
     std::array<Item, PAGE_SIZE> page;
 
     Entry tmp;
-    while (true) {
+    while (index * PAGE_SIZE < input.quantity() && !input.eof()) {
         // Lê a proxima página
         page = input.GetNextPage();
-        if (input.eof()) {
-            break;
-        }
+
         // Grava a entrada no arquivo de cache
         tmp.key = page[0].key;
         tmp.pageIndex = index;
@@ -52,7 +51,6 @@ void Cache::BuildCache(File& input, const std::string& cachePath) {
         index++;
     }
     cacheFile.close();
-    // this->file_(cachePath, std::ios::binary);
 }
 
 bool Cache::ValidateCache(const File& input) {

@@ -1,10 +1,15 @@
 #include <algorithm>
+#include <array>
+#include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <vector>
 
-#include "./Item.hpp"
+#include "Common.hpp"
+#include "Item.hpp"
 
 struct Args {
     std::filesystem::path outputPath;
@@ -13,6 +18,8 @@ struct Args {
 };
 
 int main(int argc, char* argv[]) {
+    Log::enableInfo = true;
+
     Args args{
         .outputPath = std::filesystem::path(argv[0]).root_directory(),
         .quantity = 2000000,
@@ -23,34 +30,64 @@ int main(int argc, char* argv[]) {
     while (currentArgIdx < argc) {
         auto currentArg = std::string(argv[currentArgIdx]);
 
-        if (currentArg == "-o") {
+        if (currentArg == "-o" && currentArgIdx + 1 < argc) {
             args.outputPath = std::filesystem::path(argv[currentArgIdx + 1]);
             currentArgIdx += 2;
             continue;
         }
 
-        if (currentArg == "-q") {
+        if (currentArg == "-q" && currentArgIdx + 1 < argc) {
             args.quantity = std::atoi(argv[currentArgIdx + 1]);
             currentArgIdx += 2;
             continue;
         }
 
-        if (currentArg == "-s") {
+        if (currentArg == "-s" && currentArgIdx + 1 < argc) {
             args.swaps = std::atoi(argv[currentArgIdx + 1]);
             currentArgIdx += 2;
             continue;
         }
 
-        std::cout << "USAGE: " << argv[0]
-                  << " [-o PATH] [-q QUANTITY] [-s SWAPS]\n";
+        Log::Error("USAGE: " + std::string(argv[0]) +
+                   " [-o PATH] [-q QUANTITY] [-s SWAPS]");
         return 0;
     }
 
+    if (args.quantity <= 0) {
+        Log::Error("<quantity> must be greater than 0");
+        return -1;
+    }
+
+    if (args.swaps < 0) {
+        Log::Error("<swaps> must be greater than or equal to 0");
+        return -1;
+    }
+
+    std::error_code ec;
+    if (!args.outputPath.empty() && !std::filesystem::exists(args.outputPath)) {
+        std::filesystem::create_directories(args.outputPath, ec);
+        if (ec) {
+            Log::Error("Failed to create output directory: " +
+                       args.outputPath.string());
+            return -1;
+        }
+    }
+
+    Log::Info("Starting data generation in " + args.outputPath.string() +
+              " (quantity=" + std::to_string(args.quantity) +
+              ", swaps=" + std::to_string(args.swaps) + ")");
+
     std::srand(std::time({}));
 
-    std::fstream firstFile(
-        args.outputPath / "items_ascending.bin",
-        std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+    const auto ascPath = args.outputPath / "items_ascending.bin";
+    Log::Info("Generating ascending file: " + ascPath.string());
+
+    std::fstream firstFile(ascPath, std::ios::binary | std::ios::in |
+                                        std::ios::out | std::ios::trunc);
+    if (!firstFile.is_open()) {
+        Log::Error("Failed to open file: " + ascPath.string());
+        return -1;
+    }
 
     Item item;
     item.text.fill('\0');
@@ -59,30 +96,71 @@ int main(int argc, char* argv[]) {
         item.value = std::rand();
         firstFile.write(reinterpret_cast<char*>(&item), sizeof(Item));
     }
+    firstFile.flush();
+    Log::Info("Ascending file generated successfully (" +
+              std::to_string(args.quantity) + " items)");
 
-    std::ofstream secondFile(args.outputPath / "items_descending.bin",
-                             std::ios::binary | std::ios::trunc);
+    const auto descPath = args.outputPath / "items_descending.bin";
+    Log::Info("Generating descending file: " + descPath.string());
 
-    std::array<Item, 100> items;
-    for (int i = 0; i < args.quantity / 100; i++) {
-        firstFile.seekg(-i * sizeof(items), std::ios::end);
-        firstFile.read(reinterpret_cast<char*>(&items), sizeof(items));
+    std::ofstream secondFile(descPath, std::ios::binary | std::ios::trunc);
+    if (!secondFile.is_open()) {
+        Log::Error("Failed to open file: " + descPath.string());
+        return -1;
+    }
+
+    std::array<Item, PAGE_SIZE> items;
+    firstFile.clear();
+
+    const int numPages = args.quantity / PAGE_SIZE;
+    const int remainder = args.quantity % PAGE_SIZE;
+    if (remainder > 0) {
+        std::vector<Item> remItems(remainder);
+        firstFile.seekg(-static_cast<std::streamoff>(remainder * sizeof(Item)),
+                        std::ios::end);
+        firstFile.read(reinterpret_cast<char*>(remItems.data()),
+                       remainder * sizeof(Item));
+        std::ranges::reverse(remItems);
+        secondFile.write(reinterpret_cast<char*>(remItems.data()),
+                         remainder * sizeof(Item));
+    }
+    for (int i = 0; i < numPages; i++) {
+        firstFile.seekg(-static_cast<std::streamoff>(
+                            (remainder + ((i + 1) * PAGE_SIZE)) * sizeof(Item)),
+                        std::ios::end);
+        firstFile.read(reinterpret_cast<char*>(items.data()), sizeof(items));
 
         std::ranges::reverse(items);
 
-        secondFile.write(reinterpret_cast<char*>(&items), sizeof(items));
+        secondFile.write(reinterpret_cast<char*>(items.data()), sizeof(items));
     }
 
     firstFile.close();
     secondFile.close();
+    Log::Info("Descending file generated successfully (" +
+              std::to_string(args.quantity) + " items)");
+
+    const auto shufPath = args.outputPath / "items_shuffled.bin";
+    Log::Info("Generating shuffled file: " + shufPath.string());
 
     std::filesystem::copy_file(
-        args.outputPath / "items_ascending.bin",
-        args.outputPath / "items_shuffled.bin",
-        std::filesystem::copy_options::overwrite_existing);
+        ascPath, shufPath, std::filesystem::copy_options::overwrite_existing,
+        ec);
+    if (ec) {
+        Log::Error("Failed to copy ascending file to shuffled file: " +
+                   ec.message());
+        return -1;
+    }
 
-    std::fstream thirdFile(args.outputPath / "items_ascending.bin",
+    Log::Info("Applying " + std::to_string(args.swaps) +
+              " swaps to shuffled file");
+
+    std::fstream thirdFile(shufPath,
                            std::ios::binary | std::ios::in | std::ios::out);
+    if (!thirdFile.is_open()) {
+        Log::Error("Failed to open file: " + shufPath.string());
+        return -1;
+    }
 
     for (int i = 0; i < args.swaps; i++) {
         auto first = std::rand() % args.quantity;
@@ -95,18 +173,27 @@ int main(int argc, char* argv[]) {
         Item firstItem;
         Item secondItem;
 
-        thirdFile.seekg(first * sizeof(Item), std::ios::beg);
+        thirdFile.seekg(static_cast<std::streamoff>(first) * sizeof(Item),
+                        std::ios::beg);
         thirdFile.read(reinterpret_cast<char*>(&firstItem), sizeof(Item));
 
-        thirdFile.seekg(second * sizeof(Item), std::ios::beg);
+        thirdFile.seekg(static_cast<std::streamoff>(second) * sizeof(Item),
+                        std::ios::beg);
         thirdFile.read(reinterpret_cast<char*>(&secondItem), sizeof(Item));
 
-        thirdFile.seekg(first * sizeof(Item), std::ios::beg);
+        thirdFile.seekp(static_cast<std::streamoff>(first) * sizeof(Item),
+                        std::ios::beg);
         thirdFile.write(reinterpret_cast<char*>(&secondItem), sizeof(Item));
 
-        thirdFile.seekg(second * sizeof(Item), std::ios::beg);
+        thirdFile.seekp(static_cast<std::streamoff>(second) * sizeof(Item),
+                        std::ios::beg);
         thirdFile.write(reinterpret_cast<char*>(&firstItem), sizeof(Item));
     }
 
+    thirdFile.close();
+    Log::Info("Shuffled file generated successfully (" +
+              std::to_string(args.swaps) + " swaps applied)");
+
+    Log::Info("Data generation completed successfully");
     return 0;
 }

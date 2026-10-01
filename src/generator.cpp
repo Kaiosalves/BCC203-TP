@@ -95,6 +95,15 @@ int main(int argc, char* argv[]) {
         item.key = i;
         item.value = std::rand();
         firstFile.write(reinterpret_cast<char*>(&item), sizeof(Item));
+        if (args.quantity >= 500000 &&
+            ((i + 1) % (args.quantity / 5) == 0 || i + 1 == args.quantity)) {
+            Log::Info(
+                "Generating ascending file progress: " + std::to_string(i + 1) +
+                "/" + std::to_string(args.quantity) + " items (" +
+                std::to_string((static_cast<int64_t>(i + 1) * 100) /
+                               args.quantity) +
+                "%)");
+        }
     }
     firstFile.flush();
     Log::Info("Ascending file generated successfully (" +
@@ -133,6 +142,16 @@ int main(int argc, char* argv[]) {
         std::ranges::reverse(items);
 
         secondFile.write(reinterpret_cast<char*>(items.data()), sizeof(items));
+
+        if (numPages >= 5000 &&
+            ((i + 1) % (numPages / 5) == 0 || i + 1 == numPages)) {
+            Log::Info(
+                "Generating descending file progress: " +
+                std::to_string(i + 1) + "/" + std::to_string(numPages) +
+                " pages (" +
+                std::to_string((static_cast<int64_t>(i + 1) * 100) / numPages) +
+                "%)");
+        }
     }
 
     firstFile.close();
@@ -188,6 +207,15 @@ int main(int argc, char* argv[]) {
         thirdFile.seekp(static_cast<std::streamoff>(second) * sizeof(Item),
                         std::ios::beg);
         thirdFile.write(reinterpret_cast<char*>(&firstItem), sizeof(Item));
+
+        if (args.swaps >= 10000 &&
+            ((i + 1) % (args.swaps / 10) == 0 || i + 1 == args.swaps)) {
+            Log::Info("Applying swaps progress: " + std::to_string(i + 1) +
+                      "/" + std::to_string(args.swaps) + " swaps (" +
+                      std::to_string((static_cast<int64_t>(i + 1) * 100) /
+                                     args.swaps) +
+                      "%)");
+        }
     }
 
     thirdFile.close();

@@ -11,23 +11,29 @@ using namespace Algorithm::IndexedSequentialAccess;
 
 Cache::Cache(File& input) {
     std::string const cachePath = GetCachePath(input);
-    Log::Info("Cache: initializing index cache for " + input.path());
+    Log::Info("IndexedSequentialAccess: initializing index cache for " +
+              input.path());
 
     if (!TryLoadExistingCache(cachePath, input)) {
         Log::Info(
-            "Cache: existing cache not valid or missing, building new cache "
-            "at " +
+            "IndexedSequentialAccess: existing cache not valid or missing, "
+            "building new cache at " +
             cachePath);
         BuildCache(input, cachePath);
         this->file_.open(cachePath, std::ios::binary);
         if (!this->file_.is_open()) {
-            Log::Error("Cache: failed to open cache file after build: " +
-                       cachePath);
+            Log::Error(
+                "IndexedSequentialAccess: failed to open cache file after "
+                "build: " +
+                cachePath);
         } else {
-            Log::Info("Cache: successfully opened cache file: " + cachePath);
+            Log::Info(
+                "IndexedSequentialAccess: successfully opened cache file: " +
+                cachePath);
         }
     } else {
-        Log::Info("Cache: using existing valid cache: " + cachePath);
+        Log::Info("IndexedSequentialAccess: using existing valid cache: " +
+                  cachePath);
     }
 }
 
@@ -38,10 +44,11 @@ Cache::~Cache() {
 }
 
 void Cache::BuildCache(File& input, const std::string& cachePath) {
-    Log::Info("Cache: building cache file: " + cachePath);
+    Log::Info("IndexedSequentialAccess: building cache file: " + cachePath);
     std::ofstream cacheFile(cachePath, std::ios::binary);
     if (!cacheFile.is_open()) {
-        Log::Error("Cache: failed to create cache file: " + cachePath);
+        Log::Error("IndexedSequentialAccess: failed to create cache file: " +
+                   cachePath);
         return;
     }
     // Escrevendo dados sobre os últimos acessos
@@ -50,9 +57,15 @@ void Cache::BuildCache(File& input, const std::string& cachePath) {
     meta.size = input.size();
     cacheFile.write(reinterpret_cast<char*>(&meta), sizeof(Metadata));
     if (!cacheFile) {
-        Log::Error("Cache: failed to write metadata header to: " + cachePath);
+        Log::Error(
+            "IndexedSequentialAccess: failed to write metadata header to: " +
+            cachePath);
         return;
     }
+
+    const uint64_t totalPages = (input.quantity() + PAGE_SIZE - 1) / PAGE_SIZE;
+    const uint64_t logInterval =
+        totalPages <= 100 ? 1 : std::max(uint64_t{1}, totalPages / 20);
 
     size_t index = 0;
     std::array<Item, PAGE_SIZE> page;
@@ -68,18 +81,31 @@ void Cache::BuildCache(File& input, const std::string& cachePath) {
 
         cacheFile.write(reinterpret_cast<char*>(&tmp), sizeof(Entry));
         if (!cacheFile) {
-            Log::Error("Cache: failed to write entry at page index " +
-                       std::to_string(index) + " to: " + cachePath);
+            Log::Error(
+                "IndexedSequentialAccess: failed to write entry at page "
+                "index " +
+                std::to_string(index) + " to: " + cachePath);
             return;
         }
+
+        if ((index + 1) % logInterval == 0 || index + 1 == totalPages) {
+            Log::Info(
+                "IndexedSequentialAccess: building cache - processed "
+                "page " +
+                std::to_string(index + 1) + "/" + std::to_string(totalPages) +
+                " (indexed key " + std::to_string(tmp.key) + ")");
+        }
+
         index++;
     }
     cacheFile.close();
     if (cacheFile.fail()) {
-        Log::Error("Cache: failed to close cache file properly: " + cachePath);
+        Log::Error(
+            "IndexedSequentialAccess: failed to close cache file properly: " +
+            cachePath);
         return;
     }
-    Log::Info("Cache: index cache built successfully with " +
+    Log::Info("IndexedSequentialAccess: index cache built successfully with " +
               std::to_string(index) + " entries");
 }
 
@@ -92,7 +118,8 @@ bool Cache::ValidateCache(const File& input) {
 
     if (!this->file_.read(reinterpret_cast<char*>(&cachedMetadata),
                           sizeof(Metadata))) {
-        Log::Error("Cache: failed to read metadata from cache file");
+        Log::Error(
+            "IndexedSequentialAccess: failed to read metadata from cache file");
         this->file_.clear();
         return false;
     }
@@ -103,25 +130,29 @@ bool Cache::ValidateCache(const File& input) {
     bool const sameSize = (cachedMetadata.size == input.size());
 
     if (!sameModificationTime || !sameSize) {
-        Log::Info("Cache: validation failed, input file modified or resized");
+        Log::Info(
+            "IndexedSequentialAccess: validation failed, input file modified "
+            "or resized");
         return false;
     }
 
-    Log::Info("Cache: validation succeeded");
+    Log::Info("IndexedSequentialAccess: validation succeeded");
     return true;
 }
 
 bool Cache::TryLoadExistingCache(const std::string& cachePath,
                                  const File& input) {
     if (!std::filesystem::exists(cachePath)) {
-        Log::Info("Cache: file not found: " + cachePath);
+        Log::Info("IndexedSequentialAccess: file not found: " + cachePath);
         return false;
     }
 
     this->file_.open(cachePath, std::ios::binary);
 
     if (!this->file_.is_open()) {
-        Log::Error("Cache: failed to open existing cache file: " + cachePath);
+        Log::Error(
+            "IndexedSequentialAccess: failed to open existing cache file: " +
+            cachePath);
         return false;
     }
 
@@ -138,10 +169,12 @@ std::string Cache::GetCachePath(const File& input) {
 }
 
 std::optional<Cache::Entry> Cache::Search(int key) {
-    Log::Info("Cache: searching for key " + std::to_string(key));
+    Log::Info("IndexedSequentialAccess: searching for key " +
+              std::to_string(key));
     // Verifica se o arq de indice esta aberto
     if (!this->file_.is_open()) {
-        Log::Error("Cache: search failed, cache file is not open");
+        Log::Error(
+            "IndexedSequentialAccess: search failed, cache file is not open");
         return std::nullopt;
     }
 
@@ -152,7 +185,8 @@ std::optional<Cache::Entry> Cache::Search(int key) {
     auto const sizeInBytes = static_cast<uint64_t>(fileSize);
 
     if (sizeInBytes < sizeof(Metadata)) {
-        Log::Error("Cache: file size (" + std::to_string(sizeInBytes) +
+        Log::Error("IndexedSequentialAccess: file size (" +
+                   std::to_string(sizeInBytes) +
                    " bytes) is smaller than metadata header");
         return std::nullopt;
     }
@@ -161,12 +195,12 @@ std::optional<Cache::Entry> Cache::Search(int key) {
     uint64_t const totalEntries =
         (sizeInBytes - sizeof(Metadata)) / sizeof(Entry);
     if (totalEntries == 0) {
-        Log::Info("Cache: cache contains 0 entries");
+        Log::Info("IndexedSequentialAccess: cache contains 0 entries");
         return std::nullopt;
     }
 
-    Log::Info("Cache: binary search over " + std::to_string(totalEntries) +
-              " entries");
+    Log::Info("IndexedSequentialAccess: binary search over " +
+              std::to_string(totalEntries) + " entries");
 
     int64_t lower = 0;
     int64_t higher = static_cast<int64_t>(totalEntries) - 1;
@@ -184,12 +218,14 @@ std::optional<Cache::Entry> Cache::Search(int key) {
 
         Entry entry;
         if (!this->file_.read(reinterpret_cast<char*>(&entry), sizeof(Entry))) {
-            Log::Error("Cache: failed to read entry at index " +
-                       std::to_string(mid));
+            Log::Error(
+                "IndexedSequentialAccess: failed to read entry at index " +
+                std::to_string(mid));
             return std::nullopt;
         }
 
-        Log::Info("Cache: binary search mid=" + std::to_string(mid) +
+        Log::Info("IndexedSequentialAccess: binary search mid=" +
+                  std::to_string(mid) +
                   ", entry.key=" + std::to_string(entry.key) +
                   ", pageIndex=" + std::to_string(entry.pageIndex));
 
@@ -204,11 +240,11 @@ std::optional<Cache::Entry> Cache::Search(int key) {
     }
 
     if (result.has_value()) {
-        Log::Info("Cache: found candidate page " +
+        Log::Info("IndexedSequentialAccess: found candidate page " +
                   std::to_string(result->pageIndex) + " with index key " +
                   std::to_string(result->key));
     } else {
-        Log::Info("Cache: key " + std::to_string(key) +
+        Log::Info("IndexedSequentialAccess: key " + std::to_string(key) +
                   " is smaller than all indexed keys");
     }
 

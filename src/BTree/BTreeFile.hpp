@@ -11,9 +11,10 @@
 #include "../Common.hpp"
 #include "../File.hpp"
 #include "../Item.hpp"
+#include "IBTreeData.hpp"
 
 namespace Algorithm::BTree {
-class BTreeFile {
+class BTreeFile : public IBTreeData {
 public:
     /**
      * @brief Metadados gravados no cabeçalho do arquivo da árvore B em disco.
@@ -22,49 +23,6 @@ public:
         std::filesystem::file_time_type lastModification;
         uint64_t size;
         int64_t rootIndex;
-    };
-
-    /**
-     * @brief Entrada armazenada em cada nó da árvore B.
-     *
-     * Contém a chave inteira de busca e o índice da página no arquivo de dados
-     * onde o item reside.
-     */
-    struct Entry {
-        int key = 0;
-        uint64_t pageIndex = 0;
-    };
-
-    /**
-     * @brief Estrutura de um nó da árvore B armazenado em disco.
-     *
-     * Cada nó armazena até PAGE_SIZE entradas ordenadas por chave e até
-     * (PAGE_SIZE + 1) ponteiros (índices) para nós filhos em disco.
-     */
-    struct Node {
-        std::array<Entry, PAGE_SIZE> entries{};
-        std::array<int64_t, PAGE_SIZE + 1> nodePos{};
-        uint64_t size = 0;
-
-        /**
-         * @brief Verifica se o nó é um nó folha.
-         *
-         * Em uma árvore B balanceada, um nó é folha quando não possui nós
-         * filhos (todos os ponteiros são -1).
-         *
-         * @return true se o nó for folha; false caso contrário.
-         */
-        // 1
-        [[nodiscard]] bool isLeaf() const;
-
-        /**
-         * @brief Construtor padrão do nó.
-         *
-         * Inicializa o tamanho como 0 e preenche todos os ponteiros de filhos
-         * com -1.
-         */
-        // 1
-        Node();
     };
 
     /**
@@ -85,7 +43,7 @@ public:
      * Fecha o fluxo de leitura do arquivo em disco (`file_`).
      */
     // 1
-    ~BTreeFile();
+    ~BTreeFile() override;
 
     /**
      * @brief Realiza a pesquisa de uma chave na árvore B em disco.
@@ -97,7 +55,7 @@ public:
      * @return std::optional<Node> O nó que contém a chave, ou std::nullopt.
      */
     // 3
-    std::optional<Node> Search(int key);
+    std::optional<Node> Search(int key) override;
 
 private:
     std::ifstream file_;

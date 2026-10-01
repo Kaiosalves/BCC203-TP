@@ -1,12 +1,15 @@
 #pragma once
 
 #include <array>
+#include <memory>
 #include <optional>
 
 #include "../Common.hpp"
 #include "../File.hpp"
 #include "../Item.hpp"
 #include "BTreeFile.hpp"
+#include "BTreeMemory.hpp"
+#include "IBTreeData.hpp"
 
 namespace Algorithm::BTree {
 class BTree {
@@ -14,14 +17,17 @@ public:
     /**
      * @brief Construtor da classe BTree.
      *
-     * Inicializa a árvore B em disco a partir do arquivo binário de dados
-     * fornecido. Delega o carregamento/validação ou construção da árvore em
-     * disco para a classe BTreeFile.
+     * Inicializa a árvore B a partir do arquivo binário de dados fornecido.
+     * Por padrão, instancia a implementação em memória principal (BTreeMemory).
+     * Caso useDisk seja verdadeiro, instancia a implementação em disco
+     * (BTreeFile).
      *
      * @param input Referência para o arquivo binário de dados de entrada.
+     * @param useDisk Define se a árvore deve ser executada em disco (true) ou
+     * em RAM (false).
      */
     // 3
-    explicit BTree(File& input);
+    explicit BTree(File& input, bool useDisk = false);
 
     /**
      * @brief Destrutor padrão da classe BTree.
@@ -31,8 +37,8 @@ public:
     /**
      * @brief Realiza a busca de um item pela chave informada na árvore B.
      *
-     * Consulta primeiramente o arquivo da árvore B em disco através de
-     * `file_.Search(key)` para determinar em qual página do arquivo de dados a
+     * Consulta primeiramente a estrutura da árvore B através de
+     * `tree_->Search(key)` para determinar em qual página do arquivo de dados a
      * chave reside:
      * - Se a chave não for encontrada na árvore B, encerra a busca retornando
      * vazio.
@@ -49,20 +55,20 @@ public:
 
 private:
     File& input_;
-    BTreeFile file_;
+    std::unique_ptr<IBTreeData> tree_;
 
     /**
      * @brief Localiza uma entrada com a chave especificada dentro de um nó da
      * árvore B.
      *
-     * @param node Nó recuperado do arquivo da árvore B.
+     * @param node Nó recuperado da árvore B.
      * @param key Chave procurada.
-     * @return std::optional<BTreeFile::Entry> A entrada contendo a chave e
+     * @return std::optional<IBTreeData::Entry> A entrada contendo a chave e
      * pageIndex, ou std::nullopt caso não esteja presente no nó.
      */
     // 3
-    static std::optional<BTreeFile::Entry> FindEntryInNode(
-        const BTreeFile::Node& node, int key);
+    static std::optional<IBTreeData::Entry> FindEntryInNode(
+        const IBTreeData::Node& node, int key);
 
     /**
      * @brief Realiza a busca pelo item desejado dentro de uma página carregada

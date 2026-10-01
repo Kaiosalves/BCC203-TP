@@ -10,7 +10,7 @@
 using namespace Algorithm::BinaryTree;
 
 BTreeFile::BTreeFile(File& input) {
-    std::string const path = GetFilePath(input); 
+    std::string const path = GetFilePath(input);
 
     if (!TryLoadExistingFile(path, input)) {
         BuildFile(input, path);
@@ -206,45 +206,46 @@ void BTreeFile::PopulateTree(std::fstream& file, File& input,
 }
 
 std::optional<BTreeFile::Node> BTreeFile::Search(int key) {
-    if(!this->file_.is_open()){
+    if (!this->file_.is_open()) {
         return std::nullopt;
     }
-//inicia pela raiz
+    // inicia pela raiz
     uint64_t currentIndex = 0;
     Node currentNode;
 
-    while (currentIndex != 0 || GetNodeOffset(currentIndex) == static_cast<std::streamoff>(sizeof(Metadata))) {
-        if(!ReadNode(this->file_,currentIndex,currentNode)){
+    while (currentIndex != 0 ||
+           GetNodeOffset(currentIndex) ==
+               static_cast<std::streamoff>(sizeof(Metadata))) {
+        if (!ReadNode(this->file_, currentIndex, currentNode)) {
             return std::nullopt;
         }
-        if(key == currentNode.key){
+        if (key == currentNode.key) {
             return currentNode;
         }
-//se for menor, filho da esquerda, se maior, filho da direita
-        if(key < currentNode.key){
-            if(currentNode.left == 0){
+        // se for menor, filho da esquerda, se maior, filho da direita
+        if (key < currentNode.key) {
+            if (currentNode.left == 0) {
                 break;
             }
             currentIndex = currentNode.right;
-        }else{
-            if(currentNode.right == 0){
+        } else {
+            if (currentNode.right == 0) {
                 break;
             }
             currentIndex = currentNode.right;
         }
     }
     return std::nullopt;
-
 }
 
 std::string BTreeFile::GetFilePath(const File& input) {
     return input.path() + ".binarytree";
 }
 
-bool BTreeFile::TryLoadExistingFile(const std::string& path, const File& input){
-    
+bool BTreeFile::TryLoadExistingFile(const std::string& path,
+                                    const File& input) {
     this->file_.open(path, std::ios::in | std::ios::binary);
-    
+
     if (!this->file_.is_open()) {
         return false;
     }
@@ -252,27 +253,28 @@ bool BTreeFile::TryLoadExistingFile(const std::string& path, const File& input){
     if (!ValidateFile(input)) {
         this->file_.close();
         return false;
+    }
+
+    return true;
 }
 
-return true;
-}
+bool BTreeFile::ValidateFile(const File& input) {
+    // reposiciona o ponteiro pro inicio do arquivo de cache
+    this->file_.seekg(0, std::ifstream::beg);
 
-bool BTreeFile::ValidateFile(const File& input){
-//reposiciona o ponteiro pro inicio do arquivo de cache
-    this->file_.seekg(0,std::ifstream::beg);
-
-//le e armazena os metadados do disco(tamanho e lastmodification)
+    // le e armazena os metadados do disco(tamanho e lastmodification)
     Metadata m;
 
-    if(!this->file_.read((char*)&m, sizeof(Metadata))){
-    this->file_.clear();
-    return false;
+    if (!this->file_.read(reinterpret_cast<char*>(&m), sizeof(Metadata))) {
+        this->file_.clear();
+        return false;
     }
-//variaveis que verificam se o cache tem os mesmos metadados
-    bool sameModificationTime = (m.lastModification == input.lastModification());
+    // variaveis que verificam se o cache tem os mesmos metadados
+    bool const sameModificationTime =
+        (m.lastModification == input.lastModification());
 
-    bool sameSize = (m.size == input.size());
+    bool const sameSize = (m.size == input.size());
 
-//retorna verdadeiro se eles tem os mesmos metadados, falso se nao
+    // retorna verdadeiro se eles tem os mesmos metadados, falso se nao
     return sameModificationTime && sameSize;
-    }
+}

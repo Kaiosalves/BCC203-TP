@@ -62,6 +62,7 @@ std::optional<Item> ISA::Search(int key) {
 
     // Percorre linearmente apenas os itens válidos desta página.
     for (std::size_t i = 0; i < itemCount; ++i) {
+        Metrics::RecordKeyComparison();
         if (page[i].key == key) {
             Log::Info("IndexedSequentialAccess: key " + std::to_string(key) +
                       " found at page " + std::to_string(pageIndex) +

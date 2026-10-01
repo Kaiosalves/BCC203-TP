@@ -1,5 +1,7 @@
 #include "BTree.hpp"
 
+#include <algorithm>
+
 #include "../Common.hpp"
 
 using namespace Algorithm::BinaryTree;
@@ -27,8 +29,16 @@ std::optional<Item> BTree::Search(int key) {
     std::array<Item, PAGE_SIZE> const page =
         this->input_.GetPageAt(node->pageIndex);
 
+    const uint64_t firstItem = node->pageIndex * PAGE_SIZE;
+    const uint64_t remainingItems = this->input_.quantity() > firstItem
+                                        ? this->input_.quantity() - firstItem
+                                        : 0;
+    const size_t itemCount =
+        std::min(static_cast<uint64_t>(PAGE_SIZE), remainingItems);
+
     // loop buscando o item dentro da pagina
-    for (size_t i = 0; i < PAGE_SIZE; ++i) {
+    for (size_t i = 0; i < itemCount; ++i) {
+        Metrics::RecordKeyComparison();
         if (page[i].key == key) {
             Log::Info("BinaryTree: key " + std::to_string(key) +
                       " confirmed in page " + std::to_string(node->pageIndex) +

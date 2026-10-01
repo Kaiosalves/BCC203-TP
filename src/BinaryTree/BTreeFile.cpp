@@ -46,12 +46,14 @@ void BTreeFile::InsertItem(std::fstream& file, const Item& item,
             return;
         }
 
+        Metrics::RecordKeyComparison();
         if (item.key == currentNode.key) {
             // Chaves repetidas não criam nós adicionais.
             return;
         }
 
         // Decide qual ramo seguir conforme a ordenação da árvore binária.
+        Metrics::RecordKeyComparison();
         uint64_t& childIndex =
             item.key < currentNode.key ? currentNode.left : currentNode.right;
         if (childIndex != 0) {
@@ -160,6 +162,7 @@ bool BTreeFile::ReadNode(std::istream& file, uint64_t nodeIndex, Node& node) {
         if (file.eof()) {
             return false;
         }
+        Metrics::RecordDiskRead();
         file.read(reinterpret_cast<char*>(&node), sizeof(Node));
         if (file.fail()) {
             Log::Error("BinaryTree: read failed at node index " +
@@ -293,6 +296,7 @@ std::optional<BTreeFile::Node> BTreeFile::Search(int key) {
                   " (key=" + std::to_string(currentNode.key) +
                   ", page=" + std::to_string(currentNode.pageIndex) + ")");
 
+        Metrics::RecordKeyComparison();
         if (key == currentNode.key) {
             Log::Info("BinaryTree: key " + std::to_string(key) +
                       " matched at node " + std::to_string(currentIndex) +
@@ -300,6 +304,7 @@ std::optional<BTreeFile::Node> BTreeFile::Search(int key) {
             return currentNode;
         }
         // se for menor, filho da esquerda, se maior, filho da direita
+        Metrics::RecordKeyComparison();
         if (key < currentNode.key) {
             if (currentNode.left == 0) {
                 Log::Info("BinaryTree: left child is empty (0), key " +
@@ -360,6 +365,7 @@ bool BTreeFile::ValidateFile(const File& input) {
     // le e armazena os metadados do disco(tamanho e lastmodification)
     Metadata metadata;
 
+    Metrics::RecordDiskRead();
     if (!this->file_.read(reinterpret_cast<char*>(&metadata),
                           sizeof(Metadata))) {
         Log::Error(

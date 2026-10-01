@@ -116,6 +116,7 @@ bool Cache::ValidateCache(const File& input) {
     // le e armazena os metadados do disco(tamanho e lastmodification)
     Metadata cachedMetadata;
 
+    Metrics::RecordDiskRead();
     if (!this->file_.read(reinterpret_cast<char*>(&cachedMetadata),
                           sizeof(Metadata))) {
         Log::Error(
@@ -217,6 +218,7 @@ std::optional<Cache::Entry> Cache::Search(int key) {
         this->file_.seekg(offset, std::ifstream::beg);
 
         Entry entry;
+        Metrics::RecordDiskRead();
         if (!this->file_.read(reinterpret_cast<char*>(&entry), sizeof(Entry))) {
             Log::Error(
                 "IndexedSequentialAccess: failed to read entry at index " +
@@ -229,6 +231,7 @@ std::optional<Cache::Entry> Cache::Search(int key) {
                   ", entry.key=" + std::to_string(entry.key) +
                   ", pageIndex=" + std::to_string(entry.pageIndex));
 
+        Metrics::RecordKeyComparison();
         if (entry.key <= key) {
             result = entry;
             // procura na metade superior

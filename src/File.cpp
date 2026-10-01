@@ -40,6 +40,7 @@ std::array<Item, PAGE_SIZE> File::GetNextPage() {
     }
 
     if (toRead > 0) {
+        Metrics::RecordDiskRead();
         this->file_.read(reinterpret_cast<char*>(page.data()),
                          sizeof(Item) * toRead);
     }

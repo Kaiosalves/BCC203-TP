@@ -227,7 +227,7 @@ std::optional<BTreeFile::Node> BTreeFile::Search(int key) {
             if (currentNode.left == 0) {
                 break;
             }
-            currentIndex = currentNode.right;
+            currentIndex = currentNode.left;
         } else {
             if (currentNode.right == 0) {
                 break;

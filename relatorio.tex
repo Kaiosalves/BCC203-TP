@@ -198,16 +198,36 @@ A avaliação de cada algoritmo é realizada em duas fases distintas, conforme i
 
 Para cada fase, as seguintes grandezas são registradas através do coletor estático \texttt{Metrics}:
 \begin{itemize}
-    \item \textbf{Tempo de Execução ($T$, em milissegundos):} Mensurado via \texttt{std::chrono::}\allowbreak\texttt{high\_resolution\_clock};
+    \item \textbf{Tempo de Execução ($T$, em milissegundos):} Mensurado em alta resolução via \texttt{std::chrono::}\allowbreak\texttt{high\_resolution\_clock};
     \item \textbf{Transferências de Disco para RAM ($R$):} Contagem exata de requisições de blocos/páginas transferidos da memória secundária para a memória principal;
     \item \textbf{Comparações de Chaves ($C$):} Contagem estrita de avaliações relacionais efetuadas entre a chave buscada e as chaves dos registros indexados.
 \end{itemize}
 
 \paragraph{Regimes de Execução -- Cold vs. Warm:}
+O comportamento dos métodos de pesquisa externa é analisado sob dois regimes operacionais distintos em relação ao estado de persistência do índice em memória secundária:
 \begin{itemize}
-    \item \textbf{Cold (Execução a Frio):} Primeira execução do algoritmo após a criação do arquivo ou com os caches de página do sistema operacional purgados da memória RAM (\textit{drop caches}). Reflete a latência física e as características brutas de I/O em disco;
-    \item \textbf{Warm (Execução a Quente):} Execuções imediatas e subsequentes à primeira, onde as páginas de dados e índice já se encontram retidas no \textit{page cache} do sistema operacional na RAM. Permite avaliar o custo algorítmico e de CPU sem a penalidade de latência de leitura física de disco.
+    \item \textbf{Cold (Execução a Frio / Cold Start):} Ocorre quando \textbf{é preciso criar o arquivo de cache} correspondente à estrutura de índice. Nesse cenário, o arquivo de cache não existe previamente em disco, exigindo que a fase de pré-processamento realize a varredura completa do arquivo de dados e construa/persista a estrutura de índice do zero;
+    \item \textbf{Warm (Execução a Quente / Warm Start):} Ocorre quando \textbf{o arquivo de cache já existe} no disco previamente e está válido. O algoritmo detecta o cache pré-existente e o reaproveita/carrega diretamente, eliminando a sobrecarga de reconstrução do índice a partir do arquivo de dados.
 \end{itemize}
+
+\paragraph{Metodologia de Coleta de Dados e Formação das Tabelas:}
+Para garantir rigor científico, reprodutibilidade e mitigar ruídos estocásticos decorrentes de interrupções de hardware, paginação do sistema operacional ou flutuações de I/O em disco, cada cenário de teste experimental deve ser executado \textbf{100 vezes sob as mesmas condições}. Todos os dados mensurados nessas execuções são considerados \textbf{diretamente para o benchmark}, eliminando-se qualquer agregação ou cálculo de mediana intermediária, e reportando-se as métricas sob a ótica dos percentis \textbf{p50 (mediana)}, \textbf{p75} e \textbf{p99}.
+
+Para cada configuração avaliada (combinação de algoritmo, volume de dados $N$, estado de ordenação e regime operacional), adota-se estritamente o seguinte procedimento metodológico:
+\begin{enumerate}
+    \item \textbf{Execuções Sob as Mesmas Condições (100 Repetições):} Cada teste é executado exatamente \textbf{100 vezes sob idênticas condições operacionais e estruturais}, coletando-se diretamente as métricas de tempo de execução, transferências de disco e comparações de chaves para compor o conjunto amostral do benchmark sem agregações prévias;
+    \item \textbf{Checagem de Presença da Chave e Regeneração de Entrada:} Mantém-se a verificação mandatória de que a chave pesquisada deve estar \textbf{estritamente contida no arquivo de entrada}, considerando-se válidos exclusivamente os testes realizados com chaves presentes nos dados. Caso o teste falhe por falta da chave na entrada gerada, a execução é sumariamente desconsiderada e o teste \textbf{deve ser refeito com uma nova entrada}, reiterando-se o ciclo até totalizar as 100 execuções válidas com a chave presente;
+    \item \textbf{Controle de Regime (Cold Start vs. Warm Start):}
+    \begin{itemize}
+        \item No regime \textbf{Cold Start}, assegura-se expressamente que o arquivo de índice/cache \textbf{não exista no disco} antes do início da execução (removendo qualquer arquivo persistente prévio correspondente), forçando o algoritmo a processar o arquivo de entrada do zero e persistir a estrutura de índice em disco;
+        \item No regime \textbf{Warm Start}, a execução é realizada preservando-se o arquivo de cache previamente construído e validado no disco para a referida entrada, avaliando o custo de busca com o índice pré-existente sob as mesmas condições.
+    \end{itemize}
+    \item \textbf{Consolidação Direta no Benchmark (p50, p75 e p99):} Os dados das 100 execuções válidas são computados diretamente para a formação das estatísticas de benchmark:
+    \begin{itemize}
+        \item \textbf{Tempos de Execução:} Apuram-se os percentis da distribuição direta de tempos das 100 amostras: o \textbf{p50 (Mediana)} expressa a tendência central e o comportamento típico do sistema; o \textbf{p75 (75º Percentil)} reflete o patamar superior de tempo na maior parte dos ensaios; e o \textbf{p99 (99º Percentil)} captura a latência de cauda (\textit{tail latency}) e eventuais gargalos transitórios de I/O em disco;
+        \item \textbf{Transferências e Comparações:} Dada a natureza algorítmica uniforme dessas grandezas para uma mesma topologia de busca, reporta-se o valor mediano central (\textbf{p50}) obtido diretamente das 100 execuções.
+    \end{itemize}
+\end{enumerate}
 
 \paragraph{Cenários de Entrada (Situações):}
 Os ensaios foram conduzidos considerando três estados estruturais dos dados originais:
@@ -258,33 +278,35 @@ Ao consultar uma chave $K$:
 Por depender da pressuposição de monotonicidade entre as páginas e dentro de cada página para delimitar os intervalos de busca, o método exige obrigatoriamente que o arquivo esteja \textbf{ordenado ascendentemente} (Situação 1). A tentativa de execução sobre arquivos descendentemente ordenados (Situação 2) ou desordenados (Situação 3) é rejeitada pelo sistema por inconsistência teórica do índice esparso simples.
 
 \subsubsection{Resultados Experimentais e Tabela de Benchmark}
-A Tabela~\ref{tab:bench_isa} consolida as medições obtidas pelo método ISA em diferentes escalas volumétricas, contrastando execuções \textit{Cold} e \textit{Warm}.
+A Tabela~\ref{tab:bench_isa} consolida as medições obtidas pelo método ISA em diferentes escalas volumétricas, contrastando execuções \textit{Cold} (criação mandatória do arquivo de cache) e \textit{Warm} (reaproveitamento do arquivo de cache existente). Conforme detalhado na metodologia, os tempos de execução reportam os percentis p50, p75 e p99 obtidos diretamente a partir das 100 execuções sob as mesmas condições (com a chave garantidamente presente na entrada), enquanto transferências de disco e comparações de chaves expressam a mediana central apurada (p50).
 
 \begin{table}[H]
 \centering
 \caption{Benchmark experimental -- Acesso Sequencial Indexado (ISA).}
 \label{tab:bench_isa}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{llr rrr rrr}
+\begin{tabular}{llr rrr rr rrr rr}
 \toprule
-& & & \multicolumn{3}{c}{\textbf{Pré-processamento}} & \multicolumn{3}{c}{\textbf{Pesquisa}} \\
-\cmidrule(lr){4-6} \cmidrule(lr){7-9}
-\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} \\
+& & & \multicolumn{5}{c}{\textbf{Pré-processamento}} & \multicolumn{5}{c}{\textbf{Pesquisa}} \\
+\cmidrule(lr){4-8} \cmidrule(lr){9-13}
+& & & \multicolumn{3}{c}{\textbf{Tempo (ms)}} & \textbf{Leituras} & \textbf{Comparações} & \multicolumn{3}{c}{\textbf{Tempo (ms)}} & \textbf{Leituras} & \textbf{Comparações} \\
+\cmidrule(lr){4-6} \cmidrule(lr){9-11}
+\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} \\
 \midrule
-Ascendente & Cold & 20         & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente & Cold & 2.000      & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente & Cold & 20.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente & Cold & 200.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente & Cold & 2.000.000  & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente & Cold & 20         & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente & Cold & 2.000      & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente & Cold & 20.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente & Cold & 200.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente & Cold & 2.000.000  & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Ascendente & Warm & 20         & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente & Warm & 2.000      & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente & Warm & 20.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente & Warm & 200.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente & Warm & 2.000.000  & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente & Warm & 20         & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente & Warm & 2.000      & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente & Warm & 20.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente & Warm & 200.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente & Warm & 2.000.000  & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Descendente & Cold/Warm & Todos & \multicolumn{6}{c}{\textit{Não suportado (operação rejeitada por violação de ordenação)}} \\
-Desordenado & Cold/Warm & Todos & \multicolumn{6}{c}{\textit{Não suportado (operação rejeitada por violação de ordenação)}} \\
+Descendente & Cold/Warm & Todos & \multicolumn{10}{c}{\textit{Não suportado (operação rejeitada por violação de ordenação)}} \\
+Desordenado & Cold/Warm & Todos & \multicolumn{10}{c}{\textit{Não suportado (operação rejeitada por violação de ordenação)}} \\
 \bottomrule
 \end{tabular}%
 }
@@ -336,54 +358,56 @@ Por se tratar de uma árvore binária sem rebalanceamento automático (AVL ou Ru
 \end{itemize}
 
 \subsubsection{Resultados Experimentais e Tabela de Benchmark}
-A Tabela~\ref{tab:bench_binary_tree} sintetiza os resultados de benchmark da Árvore Binária Externa abrangendo os três tipos de entrada e regimes Cold/Warm.
+A Tabela~\ref{tab:bench_binary_tree} sintetiza os resultados de benchmark da Árvore Binária Externa abrangendo os três tipos de entrada e regimes \textit{Cold} e \textit{Warm}. Os tempos de execução reportam os percentis p50, p75 e p99 obtidos diretamente a partir das 100 execuções sob as mesmas condições (com a chave garantidamente presente na entrada), além das medianas consolidadas de transferências e comparações (p50).
 
 \begin{table}[H]
 \centering
 \caption{Benchmark experimental -- Árvore Binária de Pesquisa Externa.}
 \label{tab:bench_binary_tree}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{llr rrr rrr}
+\begin{tabular}{llr rrr rr rrr rr}
 \toprule
-& & & \multicolumn{3}{c}{\textbf{Pré-processamento}} & \multicolumn{3}{c}{\textbf{Pesquisa}} \\
-\cmidrule(lr){4-6} \cmidrule(lr){7-9}
-\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} \\
+& & & \multicolumn{5}{c}{\textbf{Pré-processamento}} & \multicolumn{5}{c}{\textbf{Pesquisa}} \\
+\cmidrule(lr){4-8} \cmidrule(lr){9-13}
+& & & \multicolumn{3}{c}{\textbf{Tempo (ms)}} & \textbf{Leituras} & \textbf{Comparações} & \multicolumn{3}{c}{\textbf{Tempo (ms)}} & \textbf{Leituras} & \textbf{Comparações} \\
+\cmidrule(lr){4-6} \cmidrule(lr){9-11}
+\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} \\
 \midrule
-Ascendente  & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Ascendente  & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Descendente & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Descendente & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Desordenado & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Desordenado & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \bottomrule
 \end{tabular}%
 }
@@ -431,54 +455,56 @@ Para encontrar um registro com chave $K$:
 \end{enumerate}
 
 \subsubsection{Resultados Experimentais e Tabela de Benchmark}
-A Tabela~\ref{tab:bench_btree} reporta os dados cronométricos e de I/O coletados nos testes com a Árvore B.
+A Tabela~\ref{tab:bench_btree} reporta os dados cronométricos e de I/O coletados nos testes com a Árvore B nos regimes \textit{Cold} e \textit{Warm}. Os tempos de execução reportam os percentis p50, p75 e p99 obtidos diretamente a partir das 100 execuções sob as mesmas condições (com a chave garantidamente presente na entrada), além das medianas consolidadas de transferências e comparações (p50).
 
 \begin{table}[H]
 \centering
 \caption{Benchmark experimental -- Árvore B.}
 \label{tab:bench_btree}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{llr rrr rrr}
+\begin{tabular}{llr rrr rr rrr rr}
 \toprule
-& & & \multicolumn{3}{c}{\textbf{Pré-processamento}} & \multicolumn{3}{c}{\textbf{Pesquisa}} \\
-\cmidrule(lr){4-6} \cmidrule(lr){7-9}
-\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} \\
+& & & \multicolumn{5}{c}{\textbf{Pré-processamento}} & \multicolumn{5}{c}{\textbf{Pesquisa}} \\
+\cmidrule(lr){4-8} \cmidrule(lr){9-13}
+& & & \multicolumn{3}{c}{\textbf{Tempo (ms)}} & \textbf{Leituras} & \textbf{Comparações} & \multicolumn{3}{c}{\textbf{Tempo (ms)}} & \textbf{Leituras} & \textbf{Comparações} \\
+\cmidrule(lr){4-6} \cmidrule(lr){9-11}
+\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} \\
 \midrule
-Ascendente  & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Ascendente  & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Descendente & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Descendente & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Desordenado & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Desordenado & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \bottomrule
 \end{tabular}%
 }
@@ -523,54 +549,56 @@ Ao consultar uma chave $K$:
 \end{enumerate}
 
 \subsubsection{Resultados Experimentais e Tabela de Benchmark}
-A Tabela~\ref{tab:bench_bstartree} expõe os resultados empíricos coletados para a Árvore B\*.
+A Tabela~\ref{tab:bench_bstartree} expõe os resultados empíricos coletados para a Árvore B\* sob os regimes \textit{Cold} e \textit{Warm}. Os tempos de execução reportam os percentis p50, p75 e p99 obtidos diretamente a partir das 100 execuções sob as mesmas condições (com a chave garantidamente presente na entrada), além das medianas consolidadas de transferências e comparações (p50).
 
 \begin{table}[H]
 \centering
 \caption{Benchmark experimental -- Árvore B*.}
 \label{tab:bench_bstartree}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{llr rrr rrr}
+\begin{tabular}{llr rrr rr rrr rr}
 \toprule
-& & & \multicolumn{3}{c}{\textbf{Pré-processamento}} & \multicolumn{3}{c}{\textbf{Pesquisa}} \\
-\cmidrule(lr){4-6} \cmidrule(lr){7-9}
-\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} & \textbf{Tempo (ms)} & \textbf{Leituras} & \textbf{Comparações} \\
+& & & \multicolumn{5}{c}{\textbf{Pré-processamento}} & \multicolumn{5}{c}{\textbf{Pesquisa}} \\
+\cmidrule(lr){4-8} \cmidrule(lr){9-13}
+& & & \multicolumn{3}{c}{\textbf{Tempo (ms)}} & \textbf{Leituras} & \textbf{Comparações} & \multicolumn{3}{c}{\textbf{Tempo (ms)}} & \textbf{Leituras} & \textbf{Comparações} \\
+\cmidrule(lr){4-6} \cmidrule(lr){9-11}
+\textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} \\
 \midrule
-Ascendente  & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Cold & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Ascendente  & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Ascendente  & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Descendente & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Cold & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Cold & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Descendente & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Descendente & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Descendente & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Descendente & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Desordenado & Cold & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Cold & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Cold & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \midrule
-Desordenado & Warm & 20        & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 2.000     & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 20.000    & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 200.000   & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 2.000.000 & 0.00 & 0 & 0 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
+Desordenado & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \bottomrule
 \end{tabular}%
 }
@@ -610,10 +638,10 @@ Na pesquisa pontual por chave:
 \end{itemize}
 
 \subsection{Impacto do Subsistema de Memória e Caches (Cold vs. Warm)}
-O contraste entre execuções \textit{Cold} e \textit{Warm} evidencia o papel preponderante do \textit{Page Cache} do núcleo do sistema operacional:
+O contraste entre execuções \textit{Cold} e \textit{Warm} evidencia tanto o custo de persistência do índice quanto o papel amortecedor do subsistema de memória e do \textit{Page Cache}:
 \begin{itemize}
-    \item Em regime \textbf{Cold}, a latência das chamadas de sistema (\texttt{read}, \texttt{lseek}) reflete a busca física no subsistema de armazenamento, tornando o tempo de execução estritamente proporcional ao número de blocos distintos acessados;
-    \item Em regime \textbf{Warm}, as páginas requisitadas residem na memória RAM gerenciada pelo kernel, reduzindo os tempos de busca de dezenas ou centenas de milissegundos para frações de milissegundos ou microssegundos.
+    \item Em regime \textbf{Cold}, a inexistência prévia do arquivo de cache impõe a obrigatoriedade de sua construção a partir do zero. Esse processo onera a fase de pré-processamento com a varredura integral da entrada e a emissão de sucessivas gravações físicas em disco para serializar a estrutura de dados, além de submeter a busca inicial às latências brutas do dispositivo de armazenamento;
+    \item Em regime \textbf{Warm}, o arquivo de cache já existe previamente no disco e é detectado pelo algoritmo. O pré-processamento resume-se à validação de metadados e carregamento dos blocos iniciais, usufruindo adicionalmente da retenção de páginas no \textit{page cache} do sistema operacional na memória RAM, o que reduz os tempos de resposta em ordens de magnitude.
 \end{itemize}
 
 \subsection{Síntese Comparativa Geral}

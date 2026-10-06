@@ -1,0 +1,203 @@
+name: Benchmark e Atualização do Relatório
+
+on:
+  workflow_dispatch:
+    inputs:
+      methods:
+        description: 'Métodos a executar (1: ISA, 2: Árvore Binária, 3: Árvore B, 4: Árvore B*)'
+        required: false
+        default: '1,2,3,4'
+        type: string
+      situations:
+        description: 'Situações dos dados (1: Ascendente, 2: Descendente, 3: Desordenado)'
+        required: false
+        default: '1,2,3'
+        type: string
+      quantities:
+        description: 'Ordens volumétricas N separadas por vírgula'
+        required: false
+        default: '20,2000,20000,200000,2000000'
+        type: string
+      regimes:
+        description: 'Regimes de execução (cold, warm)'
+        required: false
+        default: 'cold,warm'
+        type: string
+      runs:
+        description: 'Número de execuções válidas por configuração'
+        required: false
+        default: '100'
+        type: string
+      timeout:
+        description: 'Tempo limite (segundos) por execução individual'
+        required: false
+        default: '60.0'
+        type: string
+      output_dir:
+        description: 'Diretório de saída para os arquivos CSV'
+        required: false
+        default: 'results'
+        type: string
+      tex_file:
+        description: 'Caminho do arquivo LaTeX do relatório a ser atualizado'
+        required: false
+        default: 'relatorio.tex'
+        type: string
+      compile_pdf:
+        description: 'Compilar documento PDF via pdflatex (--compile)'
+        required: false
+        default: true
+        type: boolean
+      no_backup:
+        description: 'Não gerar cópia de backup (.tex.bak) no CI (--no-backup)'
+        required: false
+        default: true
+        type: boolean
+      dry_run:
+        description: 'Apenas simular a atualização do relatório (--dry-run)'
+        required: false
+        default: false
+        type: boolean
+      commit_changes:
+        description: 'Comitar e enviar alterações (relatório e resultados) ao repositório'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  benchmark:
+    name: Executar Benchmark e Atualizar Relatório
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Liberar espaço em disco no runner
+        run: |
+          echo "Espaço em disco antes da liberação:"
+          df -h /
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          echo "Espaço em disco após a liberação:"
+          df -h /
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependências Python
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Configurar ambiente C++ (C++23)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake build-essential clang
+
+      - name: Instalar ambiente LaTeX (pdflatex)
+        if: ${{ inputs.compile_pdf }}
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            texlive-latex-base \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            texlive-lang-portuguese \
+            lmodern
+
+      - name: Compilar binários (pesquisa e generator)
+        run: |
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release -j$(nproc)
+
+      - name: Gerar arquivos de dados para teste (tmp/)
+        run: |
+          MAX_Q=$(echo "${{ inputs.quantities }}" | tr ',' '\n' | tr -d ' ' | sort -n | tail -n 1)
+          echo "Quantidade máxima N identificada: $MAX_Q"
+          mkdir -p tmp
+          SWAPS=$(( MAX_Q / 2 ))
+          if [ "$SWAPS" -gt 1000000 ]; then
+            SWAPS=1000000
+          fi
+          echo "Gerando datasets em tmp/ com N=$MAX_Q e swaps=$SWAPS..."
+          ./build/generator -o tmp -q "$MAX_Q" -s "$SWAPS"
+
+      - name: Executar script de benchmark (benchmark.py)
+        run: |
+          python benchmark.py \
+            --executable build/pesquisa \
+            --tmp-dir tmp \
+            --output-dir "${{ inputs.output_dir }}" \
+            --methods "${{ inputs.methods }}" \
+            --situations "${{ inputs.situations }}" \
+            --quantities "${{ inputs.quantities }}" \
+            --regimes "${{ inputs.regimes }}" \
+            --runs "${{ inputs.runs }}" \
+            --timeout "${{ inputs.timeout }}" \
+            --verbose
+
+      - name: Atualizar conteúdo do relatório (update_report.py)
+        run: |
+          CMD="python update_report.py --csv ${{ inputs.output_dir }}/benchmark_summary.csv --tex ${{ inputs.tex_file }}"
+
+          if [ "${{ inputs.no_backup }}" = "true" ]; then
+            CMD="$CMD --no-backup"
+          fi
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            CMD="$CMD --dry-run"
+          fi
+
+          if [ "${{ inputs.compile_pdf }}" = "true" ]; then
+            CMD="$CMD --compile"
+          fi
+
+          echo "Executando: $CMD"
+          eval $CMD
+
+      - name: Upload dos artefatos de benchmark e relatório
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results-${{ github.run_id }}
+          path: |
+            ${{ inputs.output_dir }}
+            ${{ inputs.tex_file }}
+            relatorio.pdf
+          if-no-files-found: warn
+
+      - name: Commit e push das alterações
+        if: ${{ inputs.commit_changes && !inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "${{ inputs.tex_file }}" || true
+          if [ -f "relatorio.pdf" ]; then
+            git add relatorio.pdf || true
+          fi
+
+          if [ -d "${{ inputs.output_dir }}" ]; then
+            git add -f "${{ inputs.output_dir }}" || true
+          fi
+
+          if git diff --staged --quiet; then
+            echo "Nenhuma alteração para commitar."
+          else
+            git commit -m "chore(benchmark): atualizar métricas de benchmark e relatório [skip ci]"
+            git push
+          fi

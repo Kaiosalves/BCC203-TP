@@ -7,7 +7,6 @@
 #include "../Common.hpp"
 #include "../File.hpp"
 #include "../Item.hpp"
-#include "BStarTreeFile.hpp"
 #include "BStarTreeMemory.hpp"
 #include "IBStarTreeData.hpp"
 
@@ -17,17 +16,13 @@ public:
     /**
      * @brief Construtor da classe BStarTree.
      *
-     * Inicializa a árvore B* a partir do arquivo binário de dados fornecido.
-     * Por padrão, instancia a implementação em memória principal
-     * (BStarTreeMemory). Caso useDisk seja verdadeiro, instancia a
-     * implementação em disco (BStarTreeFile).
+     * Inicializa a árvore B* em memória principal a partir do arquivo
+     * binário de dados fornecido (BStarTreeMemory).
      *
      * @param input Referência para o arquivo binário de dados de entrada.
-     * @param useDisk Define se a árvore deve ser executada em disco (true) ou
-     * em RAM (false).
      */
     // 3
-    explicit BStarTree(File& input, bool useDisk = false);
+    explicit BStarTree(File& input);
 
     /**
      * @brief Destrutor padrão da classe BStarTree.

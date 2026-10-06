@@ -87,7 +87,7 @@ class ReportUpdater:
             print(f"[Erro] Arquivo CSV não encontrado: {self.summary_csv_path}", file=sys.stderr)
             return
 
-        with open(self.summary_csv_path, "r", encoding="utf-8") as f:
+        with open(self.summary_csv_path, "r", encoding="utf-8", errors="replace") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -123,7 +123,7 @@ class ReportUpdater:
             print(f"[Erro] Arquivo LaTeX não encontrado: {self.tex_path}", file=sys.stderr)
             return 0
 
-        content = self.tex_path.read_text(encoding="utf-8")
+        content = self.tex_path.read_text(encoding="utf-8", errors="replace")
         updated_content = content
         total_replacements = 0
 
@@ -242,9 +242,22 @@ class ReportUpdater:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
             )
             if res.returncode == 0:
+                # Segunda passagem rápida para resolver possíveis referências pendentes
+                subprocess.run(
+                    ["pdflatex", "-interaction=nonstopmode", self.tex_path.name],
+                    cwd=str(self.tex_path.parent),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    check=False,
+                )
                 print(f"PDF compilado com sucesso: {self.tex_path.with_suffix('.pdf')}")
                 return True
             else:

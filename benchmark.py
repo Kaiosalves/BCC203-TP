@@ -307,6 +307,8 @@ class BenchmarkSuite:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=self.timeout_seconds,
             cwd=str(self.executable_path.parent.parent),  # Raiz do projeto
         )

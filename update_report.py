@@ -174,9 +174,9 @@ class ReportUpdater:
                     table_replacements += 1
                     total_replacements += 1
                     values_str = (
-                        f" - & - & - & - & - & - & - & - & - & - % (Timeout {qty})"
+                        " - & - & - & - & - & - & - & - & - & -"
                     )
-                    return f"{indent}{sit}{sep1}{reg}{sep2}{raw_qty}{sep3} {values_str} {tail}"
+                    return f"{indent}{sit}{sep1}{reg}{sep2}{raw_qty}{sep3} {values_str} \\\\ % (Timeout {qty})"
 
                 if status == "UNSUPPORTED":
                     # Já possui tratamento próprio ou multicolumn no LaTeX

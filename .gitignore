@@ -14,3 +14,5 @@ devenv.local.yaml
 build/
 tmp/
 *.bin
+__pycache__/
+results/

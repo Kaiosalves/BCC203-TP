@@ -4,6 +4,8 @@
 #include <iostream>
 #include <string>
 
+#include "BStarTree/BStarTree.hpp"
+#include "BTree/BTree.hpp"
 #include "BinaryTree/BTree.hpp"
 #include "Common.hpp"
 #include "File.hpp"
@@ -162,6 +164,50 @@ int main(int argc, char* argv[]) {
         Metrics::SetPhase(Phase::Search);
         const auto searchStart = std::chrono::high_resolution_clock::now();
         const auto res = btree.Search(key);
+        const auto searchEnd = std::chrono::high_resolution_clock::now();
+
+        const std::chrono::duration<double, std::milli> preprocessDuration =
+            preprocessEnd - preprocessStart;
+        const std::chrono::duration<double, std::milli> searchDuration =
+            searchEnd - searchStart;
+
+        PrintResults(key, res, preprocessDuration, searchDuration);
+        return 0;
+    }
+
+    if (method == Method::BTree) {
+        Log::Info("Starting B Tree search for key " + std::to_string(key));
+        Metrics::Reset();
+        Metrics::SetPhase(Phase::Preprocessing);
+        const auto preprocessStart = std::chrono::high_resolution_clock::now();
+        auto btree = Algorithm::BTree::BTree(*file);
+        const auto preprocessEnd = std::chrono::high_resolution_clock::now();
+
+        Metrics::SetPhase(Phase::Search);
+        const auto searchStart = std::chrono::high_resolution_clock::now();
+        const auto res = btree.Search(key);
+        const auto searchEnd = std::chrono::high_resolution_clock::now();
+
+        const std::chrono::duration<double, std::milli> preprocessDuration =
+            preprocessEnd - preprocessStart;
+        const std::chrono::duration<double, std::milli> searchDuration =
+            searchEnd - searchStart;
+
+        PrintResults(key, res, preprocessDuration, searchDuration);
+        return 0;
+    }
+
+    if (method == Method::BStarTree) {
+        Log::Info("Starting B* Tree search for key " + std::to_string(key));
+        Metrics::Reset();
+        Metrics::SetPhase(Phase::Preprocessing);
+        const auto preprocessStart = std::chrono::high_resolution_clock::now();
+        auto bstartree = Algorithm::BStarTree::BStarTree(*file);
+        const auto preprocessEnd = std::chrono::high_resolution_clock::now();
+
+        Metrics::SetPhase(Phase::Search);
+        const auto searchStart = std::chrono::high_resolution_clock::now();
+        const auto res = bstartree.Search(key);
         const auto searchEnd = std::chrono::high_resolution_clock::now();
 
         const std::chrono::duration<double, std::milli> preprocessDuration =

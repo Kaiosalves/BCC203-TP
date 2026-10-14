@@ -26,8 +26,7 @@ public:
      * @param useDisk Define se a árvore deve ser executada em disco (true) ou
      * em RAM (false).
      */
-    // 3
-    explicit BTree(File& input, bool useDisk = false);
+    explicit BTree(File& input, bool useDisk = true);
 
     /**
      * @brief Destrutor padrão da classe BTree.
@@ -80,6 +79,7 @@ private:
      */
     // 3
     static std::optional<Item> SearchInPage(
-        const std::array<Item, PAGE_SIZE>& page, int key);
+        const std::array<Item, PAGE_SIZE>& page, int key,
+        size_t itemCount = PAGE_SIZE);
 };
 }  // namespace Algorithm::BTree

@@ -75,6 +75,7 @@ private:
      */
     // 3
     static std::optional<Item> SearchInPage(
-        const std::array<Item, PAGE_SIZE>& page, int key);
+        const std::array<Item, PAGE_SIZE>& page, int key,
+        size_t itemCount = PAGE_SIZE);
 };
 }  // namespace Algorithm::BStarTree

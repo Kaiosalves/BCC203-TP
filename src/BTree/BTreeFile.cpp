@@ -1,5 +1,7 @@
 #include "BTreeFile.hpp"
 
+#include <algorithm>
+#include <filesystem>
 #include <optional>
 #include <stdexcept>
 
@@ -11,9 +13,15 @@ namespace Algorithm::BTree {
 
 BTreeFile::BTreeFile(File& input) {
     std::string const path = GetFilePath(input);
+    Log::Info("BTree: checking existing B-tree file: " + path);
 
     if (!TryLoadExistingFile(path, input)) {
+        Log::Info(
+            "BTree: existing B-tree not found or invalid, building new file: " +
+            path);
         BuildFile(input, path);
+    } else {
+        Log::Info("BTree: loaded existing B-tree file successfully: " + path);
     }
 }
 
@@ -40,6 +48,9 @@ void BTreeFile::WriteMetadata(std::fstream& file, const File& input,
     tmp.rootIndex = rootIndex;
     // escrevendo os metadados na arvore
     file.write(reinterpret_cast<char*>(&tmp), sizeof(Metadata));
+    if (!file) {
+        Log::Error("BTree: failed to write metadata header");
+    }
 }
 
 std::streamoff BTreeFile::GetNodeOffset(uint64_t nodeIndex) {
@@ -47,18 +58,6 @@ std::streamoff BTreeFile::GetNodeOffset(uint64_t nodeIndex) {
                                        sizeof(Metadata));
 }
 
-/**
- * @brief Localiza a posição de busca de uma chave dentro de um nó ordenado.
- *
- * Executa busca binária nas entradas do nó.
- *
- * @param node Nó da árvore B.
- * @param key Chave buscada.
- * @param found Saída indicando se a chave existe exatamente no nó.
- * @return size_t Índice da entrada correspondente (se found for true) ou o
- *         índice do ponteiro do filho onde a chave deve residir.
- */
-// 2
 size_t BTreeFile::FindKeyIndex(const BTreeFile::Node& node, int key,
                                bool& found) {
     // Busca a primeira posição que tem chave  maior ou igual à chave buscada.
@@ -70,6 +69,7 @@ size_t BTreeFile::FindKeyIndex(const BTreeFile::Node& node, int key,
     while (first < last) {
         size_t const middle = first + ((last - first) / 2);
 
+        Metrics::RecordKeyComparison();
         if (node.entries[middle].key < key) {
             first = middle + 1;
         } else {
@@ -77,22 +77,15 @@ size_t BTreeFile::FindKeyIndex(const BTreeFile::Node& node, int key,
         }
     }
 
-    found = first < node.size && node.entries[first].key == key;
+    if (first < node.size) {
+        Metrics::RecordKeyComparison();
+        found = (node.entries[first].key == key);
+    } else {
+        found = false;
+    }
     return first;
 }
 
-/**
- * @brief Insere uma entrada e seu ponteiro à direita em um nó que não está
- * cheio.
- *
- * Desloca as entradas e ponteiros maiores mantendo a ordenação.
- *
- * @param node Nó com espaço disponível (size < PAGE_SIZE).
- * @param entry Entrada a ser inserida.
- * @param rightChild Ponteiro para o filho à direita associado à entrada (-1
- * se folha).
- */
-// 2
 void BTreeFile::InsertIntoNonFullNode(IBTreeData::Node& node,
                                       const IBTreeData::Entry& entry,
                                       int64_t rightChild) {
@@ -102,9 +95,13 @@ void BTreeFile::InsertIntoNonFullNode(IBTreeData::Node& node,
 
     // Encontra a posição em que a nova entrada mantem as chaves ordenadas
     auto insertionIndex = static_cast<size_t>(node.size);
-    while (insertionIndex > 0 &&
-           node.entries[insertionIndex - 1].key > entry.key) {
-        --insertionIndex;
+    while (insertionIndex > 0) {
+        Metrics::RecordKeyComparison();
+        if (node.entries[insertionIndex - 1].key > entry.key) {
+            --insertionIndex;
+        } else {
+            break;
+        }
     }
 
     // Abre espaço para a nova entrada, deslocando as entradas maiores a direita
@@ -125,26 +122,6 @@ void BTreeFile::InsertIntoNonFullNode(IBTreeData::Node& node,
     ++node.size;
 }
 
-/**
- * @brief Realiza a divisão (split) de um nó cheio ao receber uma nova
- * entrada.
- *
- * Divide as (PAGE_SIZE + 1) entradas em duas metades: a inferior permanece
- * no nó atual, a entrada central é promovida para o pai, e a metade
- * superior é salva em um novo nó irmão.
- *
- * @param file Fluxo de arquivo para persistência dos nós.
- * @param node Nó atual que atingiu a capacidade máxima.
- * @param nodeIndex Índice do nó atual no arquivo.
- * @param entry Entrada que causou o transbordamento.
- * @param rightChildIndex Ponteiro direito associado à nova entrada.
- * @param promotedEntry Saída contendo a entrada promovida para o nó pai.
- * @param createdSiblingIndex Saída contendo o índice do novo nó irmão
- * criado.
- * @param lastNodeIndex Referência para o controle do índice do último nó no
- * arquivo.
- */
-// 2
 void BTreeFile::SplitNode(std::fstream& file, IBTreeData::Node& node,
                           uint64_t nodeIndex, const IBTreeData::Entry& entry,
                           int64_t rightChildIndex,
@@ -161,9 +138,13 @@ void BTreeFile::SplitNode(std::fstream& file, IBTreeData::Node& node,
 
     // Encontra a posicao da nova entrada dentro das entradas ordenadas
     auto insertionIndex = static_cast<size_t>(node.size);
-    while (insertionIndex > 0 &&
-           node.entries[insertionIndex - 1].key > entry.key) {
-        --insertionIndex;
+    while (insertionIndex > 0) {
+        Metrics::RecordKeyComparison();
+        if (node.entries[insertionIndex - 1].key > entry.key) {
+            --insertionIndex;
+        } else {
+            break;
+        }
     }
 
     // Copia as entradas anteriores à posição de insercao.
@@ -228,20 +209,6 @@ void BTreeFile::SplitNode(std::fstream& file, IBTreeData::Node& node,
     WriteNode(file, nodeIndex, node);
 }
 
-/**
- * @brief Função auxiliar recursiva para inserção descendente na árvore B.
- *
- * @param file Fluxo de arquivo da árvore B.
- * @param currentNodeIndex Índice do nó atual na recursão.
- * @param entryToInsert Entrada a ser inserida.
- * @param promotedEntry Saída para entrada promovida se houver divisão do nó
- * filho.
- * @param newChildIndex Saída para índice do novo nó criado na divisão.
- * @param lastNodeIndex Referência para o controle de nós no arquivo.
- * @return true se o nó atual foi dividido e requer inserção no pai; false
- * caso contrário.
- */
-// 2
 bool BTreeFile::InsertInternal(std::fstream& file, int64_t currentNodeIndex,
                                const IBTreeData::Entry& entryToInsert,
                                IBTreeData::Entry& promotedEntry,
@@ -319,20 +286,6 @@ bool BTreeFile::InsertInternal(std::fstream& file, int64_t currentNodeIndex,
     return true;
 }
 
-/**
- * @brief Insere um item individual na árvore B.
- *
- * Inicia a inserção a partir da raiz e, se a raiz for dividida, cria uma
- * nova raiz, aumentando a altura da árvore.
- *
- * @param file Fluxo do arquivo em disco.
- * @param item Item a ser inserido.
- * @param pageIndex Índice da página do arquivo de dados onde o item se
- * encontra.
- * @param rootIndex Referência para o índice da raiz atual.
- * @param lastNodeIndex Referência para o controle de nós no arquivo.
- */
-// 2
 void BTreeFile::InsertItem(std::fstream& file, const Item& item,
                            uint64_t pageIndex, int64_t& rootIndex,
                            uint64_t& lastNodeIndex) {
@@ -389,15 +342,111 @@ void BTreeFile::InsertItem(std::fstream& file, const Item& item,
     }
 }
 
+void BTreeFile::InsertPage(std::fstream& file,
+                           const std::array<Item, PAGE_SIZE>& page,
+                           uint64_t pageIndex, size_t itemCount,
+                           int64_t& rootIndex, uint64_t& lastNodeIndex) {
+    for (size_t i = 0; i < itemCount; ++i) {
+        InsertItem(file, page[i], pageIndex, rootIndex, lastNodeIndex);
+    }
+}
+
+void BTreeFile::PopulateTree(std::fstream& file, File& input,
+                             int64_t& rootIndex, uint64_t& lastNodeIndex) {
+    Log::Info("BTree: populating B-tree from " + input.path());
+    uint64_t pageIndex = 0;
+    const uint64_t totalPages = (input.quantity() + PAGE_SIZE - 1) / PAGE_SIZE;
+    const uint64_t logInterval =
+        totalPages <= 100 ? 1 : std::max(uint64_t{1}, totalPages / 20);
+
+    while (pageIndex * PAGE_SIZE < input.quantity() && !input.eof()) {
+        std::array<Item, PAGE_SIZE> const page = input.GetNextPage();
+        uint64_t const firstItem = pageIndex * PAGE_SIZE;
+        uint64_t const remaining = input.quantity() - firstItem;
+        size_t const itemCount = static_cast<size_t>(
+            std::min(static_cast<uint64_t>(PAGE_SIZE), remaining));
+
+        if ((pageIndex + 1) % logInterval == 0 || pageIndex + 1 == totalPages ||
+            pageIndex == 0) {
+            Log::Info("BTree: processing page " +
+                      std::to_string(pageIndex + 1) + "/" +
+                      std::to_string(totalPages) + " (" +
+                      std::to_string(itemCount) + " items, current nodes: " +
+                      std::to_string(lastNodeIndex + 1) + ")");
+        }
+
+        InsertPage(file, page, pageIndex, itemCount, rootIndex, lastNodeIndex);
+        pageIndex++;
+    }
+    Log::Info("BTree: tree populated successfully with " +
+              std::to_string(lastNodeIndex + 1) + " nodes");
+}
+
+void BTreeFile::BuildFile(File& input, const std::string& path) {
+    Log::Info("BTree: starting build of B-tree file: " + path);
+    if (this->file_.is_open()) {
+        this->file_.close();
+    }
+    this->file_.clear();
+
+    std::fstream output(path, std::ios::binary | std::ios::in | std::ios::out |
+                                  std::ios::trunc);
+    if (!output.is_open()) {
+        Log::Error("BTree: failed to create B-tree file: " + path);
+        throw std::runtime_error("Failed to create B-tree file: " + path);
+    }
+
+    int64_t rootIndex = -1;
+    uint64_t lastNodeIndex = 0;
+
+    WriteMetadata(output, input, rootIndex);
+
+    if (input.quantity() > 0) {
+        PopulateTree(output, input, rootIndex, lastNodeIndex);
+    }
+
+    WriteMetadata(output, input, rootIndex);
+
+    output.flush();
+    if (!output) {
+        Log::Error("BTree: failed to flush B-tree file: " + path);
+        throw std::runtime_error("Failed to flush B-tree file");
+    }
+
+    output.close();
+    if (output.fail()) {
+        Log::Error("BTree: failed to close B-tree file: " + path);
+        throw std::runtime_error("Failed to close B-tree file");
+    }
+
+    this->rootIndex_ = rootIndex;
+    this->file_.open(path, std::ios::in | std::ios::binary);
+    if (!this->file_.is_open()) {
+        Log::Error("BTree: failed to reopen B-tree file: " + path);
+        throw std::runtime_error("Failed to reopen B-tree file: " + path);
+    }
+    Log::Info("BTree: B-tree file built and reopened successfully: " + path);
+}
+
 bool BTreeFile::TryLoadExistingFile(const std::string& path,
                                     const File& input) {
+    if (!std::filesystem::exists(path)) {
+        Log::Info("BTree: file not found: " + path);
+        return false;
+    }
+
     this->file_.open(path, std::ios::in | std::ios::binary);
 
     if (!this->file_.is_open()) {
+        Log::Error("BTree: failed to open existing B-tree file: " + path);
         return false;
     }
 
     if (!ValidateFile(input)) {
+        Log::Info(
+            "BTree: existing file validation failed, rebuilding "
+            "required: " +
+            path);
         this->file_.close();
         return false;
     }
@@ -411,50 +460,78 @@ bool BTreeFile::ValidateFile(const File& input) {
 
     // le e armazena os metadados do disco (tamanho e lastmodification)
     Metadata m;
-
+    Metrics::RecordDiskRead();
     if (!this->file_.read(reinterpret_cast<char*>(&m), sizeof(Metadata))) {
+        Log::Error("BTree: failed to read metadata header from B-tree file");
         this->file_.clear();
         return false;
     }
+
     // variaveis que verificam se o cache tem os mesmos metadados
     bool const sameModificationTime =
         (m.lastModification == input.lastModification());
     bool const sameSize = (m.size == input.size());
 
+    if (!sameModificationTime || !sameSize) {
+        Log::Info("BTree: metadata mismatch between data file and B-tree file");
+        return false;
+    }
+
+    this->rootIndex_ = m.rootIndex;
+    Log::Info("BTree: metadata successfully validated (rootIndex=" +
+              std::to_string(this->rootIndex_) + ")");
     // retorna verdadeiro se eles tem os mesmos metadados, falso se nao
-    return sameModificationTime && sameSize;
+    return true;
 }
 
 void BTreeFile::WriteNode(std::fstream& file, uint64_t nodeIndex,
                           const Node& node) {
     file.seekp(GetNodeOffset(nodeIndex));
     file.write(reinterpret_cast<const char*>(&node), sizeof(Node));
+    if (!file) {
+        Log::Error("BTree: failed to write node at index " +
+                   std::to_string(nodeIndex));
+    }
 }
 
 bool BTreeFile::ReadNode(std::istream& file, uint64_t nodeIndex, Node& node) {
     std::streamoff const offset = GetNodeOffset(nodeIndex);
 
+    file.clear();
     file.seekg(offset, std::ios::beg);
+    if (file.fail()) {
+        Log::Error("BTree: seek failed at node index " +
+                   std::to_string(nodeIndex));
+        return false;
+    }
 
+    Metrics::RecordDiskRead();
     file.read(reinterpret_cast<char*>(&node), sizeof(Node));
 
-    return !file.fail();
+    if (file.fail()) {
+        Log::Error("BTree: read failed at node index " +
+                   std::to_string(nodeIndex));
+        return false;
+    }
+
+    return true;
 }
 
 uint64_t BTreeFile::AppendNode(std::fstream& file, const Node& node,
                                uint64_t& lastNodeIndex) {
     lastNodeIndex++;
-
     WriteNode(file, lastNodeIndex, node);
-
     return lastNodeIndex;
 }
 
 std::optional<BTreeFile::Node> BTreeFile::Search(int key) {
-    if (rootIndex_ < 0) {
+    if (!this->file_.is_open() || rootIndex_ < 0) {
+        Log::Info("BTree: tree is empty or file not open");
         return std::nullopt;
     }
 
+    Log::Info("BTree: starting search for key " + std::to_string(key) +
+              " from root " + std::to_string(rootIndex_));
     int64_t currentIndex = rootIndex_;
     Node currentNode;
     bool found = false;
@@ -464,19 +541,34 @@ std::optional<BTreeFile::Node> BTreeFile::Search(int key) {
         // lê um novo nó a partir do indice
         if (!ReadNode(this->file_, static_cast<uint64_t>(currentIndex),
                       currentNode)) {
+            Log::Error("BTree: failed to read node at index " +
+                       std::to_string(currentIndex) + " during search");
             return std::nullopt;
         }
+
+        Log::Info("BTree: visiting node " + std::to_string(currentIndex) +
+                  " (keys=" + std::to_string(currentNode.size) + ")");
+
         // Busca a chave dentro do nó
         idx = FindKeyIndex(currentNode, key, found);
         // Achou? retorna o nó atual
         if (found) {
+            Log::Info("BTree: key " + std::to_string(key) +
+                      " matched in node " + std::to_string(currentIndex));
             return currentNode;
         }
+
         // Se não encontrou o item e o nó for folha o item não existe
         if (currentNode.isLeaf()) {
+            Log::Info("BTree: leaf node reached, key " + std::to_string(key) +
+                      " not found in tree");
             return std::nullopt;
         }
+
         // se não continua caminhando pelos nós
+        Log::Info("BTree: key " + std::to_string(key) +
+                  " navigating to child " +
+                  std::to_string(currentNode.nodePos[idx]));
         currentIndex = currentNode.nodePos[idx];
     }
     return std::nullopt;

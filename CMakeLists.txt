@@ -49,6 +49,12 @@ set(SEARCH_SOURCES
     src/IndexedSequentialAccess/ISA.cpp
     src/BinaryTree/BTreeFile.cpp
     src/BinaryTree/BTree.cpp
+    src/BTree/BTree.cpp
+    src/BTree/BTreeFile.cpp
+    src/BTree/BTreeMemory.cpp
+    src/BStarTree/BStarTree.cpp
+    src/BStarTree/BStarTreeMemory.cpp
+    src/BStarTree/IBStarTreeData.cpp
 )
 
 add_executable(pesquisa ${SEARCH_SOURCES})

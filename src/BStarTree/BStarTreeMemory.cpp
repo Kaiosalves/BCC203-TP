@@ -1,5 +1,6 @@
 #include "BStarTreeMemory.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -21,24 +22,38 @@ BStarTreeMemory::BStarTreeMemory(File& input) {
 
 std::optional<IBStarTreeData::Node> BStarTreeMemory::Search(int key) {
     if (rootIndex_ < 0) {
+        Log::Info("BStarTree: tree is empty");
         return std::nullopt;
     }
 
     IBStarTreeData::Node currentNode;
     int64_t currentIndex = rootIndex_;
+    Log::Info("BStarTree: starting search for key " + std::to_string(key) +
+              " from root node " + std::to_string(rootIndex_));
+
     // desce na arvore até encontrar o nó folha desejado
     while (currentIndex >= 0 &&
            static_cast<size_t>(currentIndex) < this->nodes_.size()) {
         currentNode = nodes_[currentIndex];
         if (currentNode.isLeaf()) {
+            Log::Info("BStarTree: reached leaf node " +
+                      std::to_string(currentIndex) + " with " +
+                      std::to_string(currentNode.size) + " entries");
             return currentNode;
         }
 
         bool found = false;
         size_t const chdIndex = FindKeyIndex(currentNode, key, found);
 
+        Log::Info("BStarTree: visiting index node " +
+                  std::to_string(currentIndex) +
+                  ", navigating to child index " +
+                  std::to_string(currentNode.index.nodePos[chdIndex]));
+
         currentIndex = currentNode.index.nodePos[chdIndex];
     }
+
+    Log::Info("BStarTree: key " + std::to_string(key) + " not found in tree");
     return std::nullopt;
 }
 
@@ -60,16 +75,35 @@ void BStarTreeMemory::InsertPage(const std::array<Item, PAGE_SIZE>& page,
 }
 
 void BStarTreeMemory::PopulateTree(File& input) {
+    Log::Info("BStarTree: populating B* tree from " + input.path());
     uint64_t pageIndex = 0;
+    const uint64_t totalPages = (input.quantity() + PAGE_SIZE - 1) / PAGE_SIZE;
+    const uint64_t logInterval =
+        totalPages <= 100 ? 1 : std::max(uint64_t{1}, totalPages / 20);
 
     // varre o arquivo ate o final
-    while (!input.eof()) {
+    while (pageIndex * PAGE_SIZE < input.quantity() && !input.eof()) {
         std::array<Item, PAGE_SIZE> const page = input.GetNextPage();
+        uint64_t const firstItem = pageIndex * PAGE_SIZE;
+        uint64_t const remaining = input.quantity() - firstItem;
+        size_t const itemCount = static_cast<size_t>(
+            std::min(static_cast<uint64_t>(PAGE_SIZE), remaining));
+
+        if ((pageIndex + 1) % logInterval == 0 || pageIndex + 1 == totalPages ||
+            pageIndex == 0) {
+            Log::Info("BStarTree: processing page " +
+                      std::to_string(pageIndex + 1) + "/" +
+                      std::to_string(totalPages) + " (" +
+                      std::to_string(itemCount) + " items, current nodes: " +
+                      std::to_string(this->nodes_.size()) + ")");
+        }
 
         // insere a pagina, que insere os itens na arvore na memoria
-        this->InsertPage(page, pageIndex, PAGE_SIZE);
+        this->InsertPage(page, pageIndex, itemCount);
         pageIndex++;
     }
+    Log::Info("BStarTree: tree populated successfully with " +
+              std::to_string(this->nodes_.size()) + " nodes");
 }
 
 size_t BStarTreeMemory::FindKeyIndex(const IBStarTreeData::Node& node, int key,
@@ -83,6 +117,7 @@ size_t BStarTreeMemory::FindKeyIndex(const IBStarTreeData::Node& node, int key,
         while (first < last) {
             size_t const middle = first + ((last - first) / 2);
 
+            Metrics::RecordKeyComparison();
             if (node.data.entries[middle].key < key) {
                 first = middle + 1;
             } else {
@@ -90,7 +125,12 @@ size_t BStarTreeMemory::FindKeyIndex(const IBStarTreeData::Node& node, int key,
             }
         }
 
-        found = first < node.size && node.data.entries[first].key == key;
+        if (first < node.size) {
+            Metrics::RecordKeyComparison();
+            found = (node.data.entries[first].key == key);
+        } else {
+            found = false;
+        }
         return first;
     }
 
@@ -99,6 +139,7 @@ size_t BStarTreeMemory::FindKeyIndex(const IBStarTreeData::Node& node, int key,
     while (first < last) {
         size_t const middle = first + ((last - first) / 2);
 
+        Metrics::RecordKeyComparison();
         if (key < node.index.indexes[middle]) {
             last = middle;
         } else {
@@ -111,13 +152,6 @@ size_t BStarTreeMemory::FindKeyIndex(const IBStarTreeData::Node& node, int key,
     return first;
 }
 
-/**
- * @brief Insere uma entrada em um nó folha (Data) que não está cheio.
- *
- * @param node Nó de dados com espaço disponível (size < PAGE_SIZE).
- * @param entry Entrada a ser inserida.
- */
-// 2
 void BStarTreeMemory::InsertIntoNonFullDataNode(
     IBStarTreeData::Node& node, const IBStarTreeData::Entry& entry) {
     if (node.type != IBStarTreeData::Node::Type::Data) {
@@ -146,15 +180,6 @@ void BStarTreeMemory::InsertIntoNonFullDataNode(
     ++node.size;
 }
 
-/**
- * @brief Insere uma chave e seu índice de filho direito em um nó de índice
- * que não está cheio.
- *
- * @param node Nó de índice com espaço disponível (size < PAGE_SIZE).
- * @param key Chave a ser inserida.
- * @param rightChild Índice do filho à direita associado à chave.
- */
-// 2
 void BStarTreeMemory::InsertIntoNonFullIndexNode(IBStarTreeData::Node& node,
                                                  int key, int64_t rightChild) {
     if (node.type != IBStarTreeData::Node::Type::Index) {
@@ -167,15 +192,21 @@ void BStarTreeMemory::InsertIntoNonFullIndexNode(IBStarTreeData::Node& node,
 
     // Encontra onde a nova chave separadora deve ficar em ordem crescente.
     size_t insertionIndex = 0;
-    while (insertionIndex < node.size &&
-           node.index.indexes[insertionIndex] < key) {
-        ++insertionIndex;
+    while (insertionIndex < node.size) {
+        Metrics::RecordKeyComparison();
+        if (node.index.indexes[insertionIndex] < key) {
+            ++insertionIndex;
+        } else {
+            break;
+        }
     }
 
     // Não adicione novamente uma chave separadora que já esteja no nó.
-    if (insertionIndex < node.size &&
-        node.index.indexes[insertionIndex] == key) {
-        return;
+    if (insertionIndex < node.size) {
+        Metrics::RecordKeyComparison();
+        if (node.index.indexes[insertionIndex] == key) {
+            return;
+        }
     }
 
     // Abre espaço para a chave deslocando as chaves maiores à direita.
@@ -195,18 +226,6 @@ void BStarTreeMemory::InsertIntoNonFullIndexNode(IBStarTreeData::Node& node,
     ++node.size;
 }
 
-/**
- * @brief Realiza a divisão (split) de um nó folha (Data) cheio em memória.
- *
- * @param nodeIndex Índice do nó folha atual que atingiu a capacidade
- * máxima.
- * @param entry Entrada que causou o transbordamento.
- * @param promotedEntry Saída contendo a entrada promovida com a chave
- * divisora.
- * @param createdSiblingIndex Saída contendo o índice do novo nó folha irmão
- * criado.
- */
-// 2
 void BStarTreeMemory::SplitDataNode(uint64_t nodeIndex,
                                     const IBStarTreeData::Entry& entry,
                                     IBStarTreeData::Entry& promotedEntry,
@@ -215,7 +234,7 @@ void BStarTreeMemory::SplitDataNode(uint64_t nodeIndex,
         throw std::out_of_range("B-star data node index is out of range");
     }
 
-    IBStarTreeData::Node& originalNode = this->nodes_[nodeIndex];
+    const IBStarTreeData::Node originalNode = this->nodes_[nodeIndex];
     if (originalNode.type != IBStarTreeData::Node::Type::Data) {
         throw std::logic_error("Cannot split a non-data B-star node");
     }
@@ -254,13 +273,7 @@ void BStarTreeMemory::SplitDataNode(uint64_t nodeIndex,
 
     IBStarTreeData::Node sibling(IBStarTreeData::Node::Type::Data);
     sibling.size = rightSize;
-
-    originalNode.data.entries.fill(IBStarTreeData::Entry{});
-    originalNode.size = leftSize;
-
-    for (size_t index = 0; index < leftSize; ++index) {
-        originalNode.data.entries[index] = entriesAfterInsertion[index];
-    }
+    sibling.data.nextData = originalNode.data.nextData;
 
     for (size_t index = 0; index < rightSize; ++index) {
         sibling.data.entries[index] =
@@ -270,24 +283,19 @@ void BStarTreeMemory::SplitDataNode(uint64_t nodeIndex,
     promotedEntry = sibling.data.entries[0];
 
     // Insere o novo nó na lista encadeada das folhas e atualiza o anterior
-    sibling.data.nextData = originalNode.data.nextData;
     createdSiblingIndex = static_cast<int64_t>(this->AppendNode(sibling));
-    this->nodes_[nodeIndex].data.nextData = createdSiblingIndex;
+
+    IBStarTreeData::Node leftNode(IBStarTreeData::Node::Type::Data);
+    leftNode.size = leftSize;
+    leftNode.data.nextData = createdSiblingIndex;
+
+    for (size_t index = 0; index < leftSize; ++index) {
+        leftNode.data.entries[index] = entriesAfterInsertion[index];
+    }
+
+    this->nodes_[nodeIndex] = leftNode;
 }
 
-/**
- * @brief Realiza a divisão (split) de um nó interno (Index) cheio em
- * memória.
- *
- * @param nodeIndex Índice do nó de índice atual que atingiu a capacidade
- * máxima.
- * @param key Chave promovida do filho que causou o transbordamento.
- * @param rightChildIndex Índice do filho direito associado à nova chave.
- * @param promotedEntry Saída contendo a entrada promovida para o pai.
- * @param createdSiblingIndex Saída contendo o índice do novo nó irmão
- * criado.
- */
-// 2
 void BStarTreeMemory::SplitIndexNode(uint64_t nodeIndex, int key,
                                      int64_t rightChildIndex,
                                      IBStarTreeData::Entry& promotedEntry,
@@ -296,7 +304,7 @@ void BStarTreeMemory::SplitIndexNode(uint64_t nodeIndex, int key,
         throw std::out_of_range("B-star index node index is out of range");
     }
 
-    IBStarTreeData::Node const& originalNode = this->nodes_[nodeIndex];
+    IBStarTreeData::Node const originalNode = this->nodes_[nodeIndex];
     if (originalNode.type != IBStarTreeData::Node::Type::Index) {
         throw std::logic_error("Cannot split a non-index B-star node");
     }
@@ -311,15 +319,21 @@ void BStarTreeMemory::SplitIndexNode(uint64_t nodeIndex, int key,
 
     // Localiza a posição ordenada da chave promovida pelo filho.
     size_t insertionIndex = 0;
-    while (insertionIndex < originalNode.size &&
-           originalNode.index.indexes[insertionIndex] < key) {
-        ++insertionIndex;
+    while (insertionIndex < originalNode.size) {
+        Metrics::RecordKeyComparison();
+        if (originalNode.index.indexes[insertionIndex] < key) {
+            ++insertionIndex;
+        } else {
+            break;
+        }
     }
 
-    if (insertionIndex < originalNode.size &&
-        originalNode.index.indexes[insertionIndex] == key) {
-        throw std::logic_error(
-            "Cannot split an index node with a duplicate key");
+    if (insertionIndex < originalNode.size) {
+        Metrics::RecordKeyComparison();
+        if (originalNode.index.indexes[insertionIndex] == key) {
+            throw std::logic_error(
+                "Cannot split an index node with a duplicate key");
+        }
     }
 
     // Copia as chaves menores, insere a nova chave e copia as restantes.
@@ -384,18 +398,6 @@ void BStarTreeMemory::SplitIndexNode(uint64_t nodeIndex, int key,
     this->nodes_[nodeIndex] = leftNode;
 }
 
-/**
- * @brief Função auxiliar recursiva para inserção descendente na árvore B*
- * em memória.
- *
- * @param currentNodeIndex Índice do nó atual na recursão.
- * @param entryToInsert Entrada a ser inserida.
- * @param promotedEntry Saída para entrada promovida se houver divisão.
- * @param newChildIndex Saída para índice do novo nó criado na divisão.
- * @return true se o nó atual foi dividido e requer inserção no pai; false
- * caso contrário.
- */
-// 2
 bool BStarTreeMemory::InsertInternal(int64_t currentNodeIndex,
                                      const IBStarTreeData::Entry& entryToInsert,
                                      IBStarTreeData::Entry& promotedEntry,
@@ -448,6 +450,8 @@ bool BStarTreeMemory::InsertInternal(int64_t currentNodeIndex,
         return false;
     }
 
+    currentNode = this->nodes_[nodeIndex];
+
     // Se tiver espaço, coloque no nó atual a chave e o novo filho direito.
     if (currentNode.size < PAGE_SIZE) {
         InsertIntoNonFullIndexNode(currentNode, promotedEntry.key,
@@ -469,17 +473,6 @@ bool BStarTreeMemory::InsertInternal(int64_t currentNodeIndex,
     return true;
 }
 
-/**
- * @brief Insere um item individual na árvore B* em memória.
- *
- * Inicia a inserção a partir da raiz e, se a raiz for dividida, cria uma
- * nova raiz (Index), aumentando a altura da árvore.
- *
- * @param item Item a ser inserido.
- * @param pageIndex Índice da página do arquivo de dados onde o item se
- * encontra.
- */
-// 2
 void BStarTreeMemory::InsertItem(const Item& item, uint64_t pageIndex) {
     IBStarTreeData::Entry const entryToInsert{.key = item.key,
                                               .pageIndex = pageIndex};

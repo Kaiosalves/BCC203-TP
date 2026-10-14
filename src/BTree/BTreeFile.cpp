@@ -1,85 +1,74 @@
 #include "BTreeFile.hpp"
 
+#include <optional>
 #include <stdexcept>
 
 #include "../Common.hpp"
+#include "../File.hpp"
+#include "../Item.hpp"
 
+namespace Algorithm::BTree {
 
-using namespace Algorithm::BTree;
-
-BTreeFile::BTreeFile(File& input){
-    std::string const path = GetFilePath(input); 
+BTreeFile::BTreeFile(File& input) {
+    std::string const path = GetFilePath(input);
 
     if (!TryLoadExistingFile(path, input)) {
         BuildFile(input, path);
     }
 }
 
-BTreeFile::~BTreeFile(){
+BTreeFile::~BTreeFile() {
     if (this->file_.is_open()) {
         this->file_.close();
     }
 }
-bool BTreeFile::Node::isLeaf()const{
-    for(auto& pos : nodePos){
-        if(pos != -1){
-            return false;
-        }
-    }
-    return true;
+
+std::string BTreeFile::GetFilePath(const File& input) {
+    return input.path() + ".btree";
 }
 
-
-BTreeFile::Node::Node() : size(0){
-//preenche todos os nos filhos incialmente com -1 indicando vazio
-    nodePos.fill(-1);
-}
-
-
-
-std::string BTreeFile::GetFilePath(const File& input){
-    return input.path()+ ".btree";
-}
-
-void BTreeFile::WriteMetadata(std::fstream& file, const File& input,int64_t rootIndex){
+void BTreeFile::WriteMetadata(std::fstream& file, const File& input,
+                              int64_t rootIndex) {
     // Reiniciando arquivo
     file.clear();
     file.seekg(0, std::ios::beg);
     file.seekp(0, std::ios::beg);
-    // Buscando  metadados
+    // Buscando metadados
     Metadata tmp;
     tmp.lastModification = input.lastModification();
     tmp.size = input.size();
+    tmp.rootIndex = rootIndex;
     // escrevendo os metadados na arvore
     file.write(reinterpret_cast<char*>(&tmp), sizeof(Metadata));
 }
-std::streamoff BTreeFile::GetNodeOffset(uint64_t nodeIndex){
+
+std::streamoff BTreeFile::GetNodeOffset(uint64_t nodeIndex) {
     return static_cast<std::streamoff>((nodeIndex * sizeof(Node)) +
                                        sizeof(Metadata));
-
 }
 
 /**
-* @brief Localiza a posição de busca de uma chave dentro de um nó ordenado.
-*
-* Executa busca binária nas entradas do nó.
-*
-* @param node Nó da árvore B.
-* @param key Chave buscada.
-* @param found Saída indicando se a chave existe exatamente no nó.
-* @return size_t Índice da entrada correspondente (se found for true) ou o
-*         índice do ponteiro do filho onde a chave deve residir.
-*/
+ * @brief Localiza a posição de busca de uma chave dentro de um nó ordenado.
+ *
+ * Executa busca binária nas entradas do nó.
+ *
+ * @param node Nó da árvore B.
+ * @param key Chave buscada.
+ * @param found Saída indicando se a chave existe exatamente no nó.
+ * @return size_t Índice da entrada correspondente (se found for true) ou o
+ *         índice do ponteiro do filho onde a chave deve residir.
+ */
 // 2
-size_t BTreeFile::FindKeyIndex(const BTreeFile::Node& node, int key, bool& found) {
+size_t BTreeFile::FindKeyIndex(const BTreeFile::Node& node, int key,
+                               bool& found) {
     // Busca a primeira posição que tem chave  maior ou igual à chave buscada.
     // Essa posição indica o filho por onde a busca deve continuar,
     // caso a chave não esteja neste nó.
     size_t first = 0;
-    size_t last = static_cast<size_t>(node.size);
+    auto last = static_cast<size_t>(node.size);
 
     while (first < last) {
-        size_t const middle = first + (last - first) / 2;
+        size_t const middle = first + ((last - first) / 2);
 
         if (node.entries[middle].key < key) {
             first = middle + 1;
@@ -93,16 +82,16 @@ size_t BTreeFile::FindKeyIndex(const BTreeFile::Node& node, int key, bool& found
 }
 
 /**
-* @brief Insere uma entrada e seu ponteiro à direita em um nó que não está
-* cheio.
-*
-* Desloca as entradas e ponteiros maiores mantendo a ordenação.
-*
-* @param node Nó com espaço disponível (size < PAGE_SIZE).
-* @param entry Entrada a ser inserida.
-* @param rightChild Ponteiro para o filho à direita associado à entrada (-1
-* se folha).
-*/
+ * @brief Insere uma entrada e seu ponteiro à direita em um nó que não está
+ * cheio.
+ *
+ * Desloca as entradas e ponteiros maiores mantendo a ordenação.
+ *
+ * @param node Nó com espaço disponível (size < PAGE_SIZE).
+ * @param entry Entrada a ser inserida.
+ * @param rightChild Ponteiro para o filho à direita associado à entrada (-1
+ * se folha).
+ */
 // 2
 void BTreeFile::InsertIntoNonFullNode(IBTreeData::Node& node,
                                       const IBTreeData::Entry& entry,
@@ -112,15 +101,15 @@ void BTreeFile::InsertIntoNonFullNode(IBTreeData::Node& node,
     }
 
     // Encontra a posição em que a nova entrada mantem as chaves ordenadas
-    size_t insertionIndex = static_cast<size_t>(node.size);
+    auto insertionIndex = static_cast<size_t>(node.size);
     while (insertionIndex > 0 &&
            node.entries[insertionIndex - 1].key > entry.key) {
         --insertionIndex;
     }
 
     // Abre espaço para a nova entrada, deslocando as entradas maiores a direita
-    for (size_t index = static_cast<size_t>(node.size);
-         index > insertionIndex; --index) {
+    for (auto index = static_cast<size_t>(node.size); index > insertionIndex;
+         --index) {
         node.entries[index] = node.entries[index - 1];
     }
 
@@ -137,28 +126,27 @@ void BTreeFile::InsertIntoNonFullNode(IBTreeData::Node& node,
 }
 
 /**
-* @brief Realiza a divisão (split) de um nó cheio ao receber uma nova
-* entrada.
-*
-* Divide as (PAGE_SIZE + 1) entradas em duas metades: a inferior permanece
-* no nó atual, a entrada central é promovida para o pai, e a metade
-* superior é salva em um novo nó irmão.
-*
-* @param file Fluxo de arquivo para persistência dos nós.
-* @param node Nó atual que atingiu a capacidade máxima.
-* @param nodeIndex Índice do nó atual no arquivo.
-* @param entry Entrada que causou o transbordamento.
-* @param rightChildIndex Ponteiro direito associado à nova entrada.
-* @param promotedEntry Saída contendo a entrada promovida para o nó pai.
-* @param createdSiblingIndex Saída contendo o índice do novo nó irmão
-* criado.
-* @param lastNodeIndex Referência para o controle do índice do último nó no
-* arquivo.
-*/
+ * @brief Realiza a divisão (split) de um nó cheio ao receber uma nova
+ * entrada.
+ *
+ * Divide as (PAGE_SIZE + 1) entradas em duas metades: a inferior permanece
+ * no nó atual, a entrada central é promovida para o pai, e a metade
+ * superior é salva em um novo nó irmão.
+ *
+ * @param file Fluxo de arquivo para persistência dos nós.
+ * @param node Nó atual que atingiu a capacidade máxima.
+ * @param nodeIndex Índice do nó atual no arquivo.
+ * @param entry Entrada que causou o transbordamento.
+ * @param rightChildIndex Ponteiro direito associado à nova entrada.
+ * @param promotedEntry Saída contendo a entrada promovida para o nó pai.
+ * @param createdSiblingIndex Saída contendo o índice do novo nó irmão
+ * criado.
+ * @param lastNodeIndex Referência para o controle do índice do último nó no
+ * arquivo.
+ */
 // 2
 void BTreeFile::SplitNode(std::fstream& file, IBTreeData::Node& node,
-                          uint64_t nodeIndex,
-                          const IBTreeData::Entry& entry,
+                          uint64_t nodeIndex, const IBTreeData::Entry& entry,
                           int64_t rightChildIndex,
                           IBTreeData::Entry& promotedEntry,
                           int64_t& createdSiblingIndex,
@@ -172,7 +160,7 @@ void BTreeFile::SplitNode(std::fstream& file, IBTreeData::Node& node,
     std::array<int64_t, PAGE_SIZE + 2> childrenAfterInsertion{};
 
     // Encontra a posicao da nova entrada dentro das entradas ordenadas
-    size_t insertionIndex = static_cast<size_t>(node.size);
+    auto insertionIndex = static_cast<size_t>(node.size);
     while (insertionIndex > 0 &&
            node.entries[insertionIndex - 1].key > entry.key) {
         --insertionIndex;
@@ -235,27 +223,26 @@ void BTreeFile::SplitNode(std::fstream& file, IBTreeData::Node& node,
     }
 
     // Grava o novo irmão ao final do arquivo e atualiza o nó original.
-    createdSiblingIndex = static_cast<int64_t>(
-        AppendNode(file, sibling, lastNodeIndex));
+    createdSiblingIndex =
+        static_cast<int64_t>(AppendNode(file, sibling, lastNodeIndex));
     WriteNode(file, nodeIndex, node);
 }
 
 /**
-* @brief Função auxiliar recursiva para inserção descendente na árvore B.
-*
-* @param file Fluxo de arquivo da árvore B.
-* @param currentNodeIndex Índice do nó atual na recursão.
-* @param entryToInsert Entrada a ser inserida.
-* @param promotedEntry Saída para entrada promovida se houver divisão do nó
-* filho.
-* @param newChildIndex Saída para índice do novo nó criado na divisão.
-* @param lastNodeIndex Referência para o controle de nós no arquivo.
-* @return true se o nó atual foi dividido e requer inserção no pai; false
-* caso contrário.
-*/
+ * @brief Função auxiliar recursiva para inserção descendente na árvore B.
+ *
+ * @param file Fluxo de arquivo da árvore B.
+ * @param currentNodeIndex Índice do nó atual na recursão.
+ * @param entryToInsert Entrada a ser inserida.
+ * @param promotedEntry Saída para entrada promovida se houver divisão do nó
+ * filho.
+ * @param newChildIndex Saída para índice do novo nó criado na divisão.
+ * @param lastNodeIndex Referência para o controle de nós no arquivo.
+ * @return true se o nó atual foi dividido e requer inserção no pai; false
+ * caso contrário.
+ */
 // 2
-bool BTreeFile::InsertInternal(std::fstream& file,
-                               int64_t currentNodeIndex,
+bool BTreeFile::InsertInternal(std::fstream& file, int64_t currentNodeIndex,
                                const IBTreeData::Entry& entryToInsert,
                                IBTreeData::Entry& promotedEntry,
                                int64_t& newChildIndex,
@@ -264,12 +251,13 @@ bool BTreeFile::InsertInternal(std::fstream& file,
         throw std::logic_error("Invalid B-tree node index during insertion");
     }
 
-    uint64_t const nodeIndex = static_cast<uint64_t>(currentNodeIndex);
+    auto const nodeIndex = static_cast<uint64_t>(currentNodeIndex);
     IBTreeData::Node currentNode;
 
     // Carrega do arquivo o nó em que esta etapa da inserção está trabalhando
     if (!ReadNode(file, nodeIndex, currentNode)) {
-        throw std::runtime_error("Failed to read a B-tree node during insertion");
+        throw std::runtime_error(
+            "Failed to read a B-tree node during insertion");
     }
 
     // Descobre se a entrada já existe e qual posição deve ser analisada.
@@ -290,7 +278,8 @@ bool BTreeFile::InsertInternal(std::fstream& file,
             return false;
         }
 
-        // Se a folha estiver cheia, faz a divisao e devolve a entrada promovida.
+        // Se a folha estiver cheia, faz a divisao e devolve a entrada
+        // promovida.
         SplitNode(file, currentNode, nodeIndex, entryToInsert, -1,
                   promotedEntry, newChildIndex, lastNodeIndex);
         return true;
@@ -331,18 +320,18 @@ bool BTreeFile::InsertInternal(std::fstream& file,
 }
 
 /**
-* @brief Insere um item individual na árvore B.
-*
-* Inicia a inserção a partir da raiz e, se a raiz for dividida, cria uma
-* nova raiz, aumentando a altura da árvore.
-*
-* @param file Fluxo do arquivo em disco.
-* @param item Item a ser inserido.
-* @param pageIndex Índice da página do arquivo de dados onde o item se
-* encontra.
-* @param rootIndex Referência para o índice da raiz atual.
-* @param lastNodeIndex Referência para o controle de nós no arquivo.
-*/
+ * @brief Insere um item individual na árvore B.
+ *
+ * Inicia a inserção a partir da raiz e, se a raiz for dividida, cria uma
+ * nova raiz, aumentando a altura da árvore.
+ *
+ * @param file Fluxo do arquivo em disco.
+ * @param item Item a ser inserido.
+ * @param pageIndex Índice da página do arquivo de dados onde o item se
+ * encontra.
+ * @param rootIndex Referência para o índice da raiz atual.
+ * @param lastNodeIndex Referência para o controle de nós no arquivo.
+ */
 // 2
 void BTreeFile::InsertItem(std::fstream& file, const Item& item,
                            uint64_t pageIndex, int64_t& rootIndex,
@@ -382,7 +371,8 @@ void BTreeFile::InsertItem(std::fstream& file, const Item& item,
         return;
     }
 
-    // A raiz foi dividida, entao cria uma nova raiz apontando para as duas metades.
+    // A raiz foi dividida, entao cria uma nova raiz apontando para as duas
+    // metades.
     if (newChildIndex < 0) {
         throw std::logic_error("Root split did not create a right child");
     }
@@ -393,16 +383,16 @@ void BTreeFile::InsertItem(std::fstream& file, const Item& item,
     newRoot.nodePos[1] = newChildIndex;
     newRoot.size = 1;
 
-    rootIndex = static_cast<int64_t>(
-        AppendNode(file, newRoot, lastNodeIndex));
+    rootIndex = static_cast<int64_t>(AppendNode(file, newRoot, lastNodeIndex));
     if (!file) {
         throw std::runtime_error("Failed to write the new B-tree root");
     }
 }
 
-bool BTreeFile::TryLoadExistingFile(const std::string& path, const File& input){
+bool BTreeFile::TryLoadExistingFile(const std::string& path,
+                                    const File& input) {
     this->file_.open(path, std::ios::in | std::ios::binary);
-    
+
     if (!this->file_.is_open()) {
         return false;
     }
@@ -410,56 +400,86 @@ bool BTreeFile::TryLoadExistingFile(const std::string& path, const File& input){
     if (!ValidateFile(input)) {
         this->file_.close();
         return false;
-}
-
-return true;
-}
-
-bool BTreeFile::ValidateFile(const File& input){
-    //reposiciona o ponteiro pro inicio do arquivo de cache
-    this->file_.seekg(0,std::ifstream::beg);
-
-//le e armazena os metadados do disco(tamanho e lastmodification)
-    Metadata m;
-
-    if(!this->file_.read((char*)&m, sizeof(Metadata))){
-    this->file_.clear();
-    return false;
-    }
-//variaveis que verificam se o cache tem os mesmos metadados
-    bool sameModificationTime = (m.lastModification == input.lastModification());
-
-    bool sameSize = (m.size == input.size());
-
-//retorna verdadeiro se eles tem os mesmos metadados, falso se nao
-    return sameModificationTime && sameSize;
-}
-
-void BTreeFile::WriteNode(std::fstream& file, uint64_t nodeIndex,const Node& node){
-    file.seekp(GetNodeOffset(nodeIndex));
-    file.write(reinterpret_cast<const char*>(&node), sizeof(Node));
-}
-
-bool BTreeFile::ReadNode(std::istream& file, uint64_t nodeIndex, Node& node){
-       
-    std::streamoff const offset = GetNodeOffset(nodeIndex);
-
-    file.seekg(offset, std::ios::beg);
-        
-    file.read(reinterpret_cast<char*>(&node), sizeof(Node));
-    
-    if(file.fail()){
-        return false;
     }
 
     return true;
 }
 
-uint64_t BTreeFile::AppendNode(std::fstream& file, const Node& node,uint64_t& lastNodeIndex){
-    lastNodeIndex++;  
-    
-    WriteNode(file, lastNodeIndex, node);
+bool BTreeFile::ValidateFile(const File& input) {
+    // reposiciona o ponteiro pro inicio do arquivo de cache
+    this->file_.seekg(0, std::ifstream::beg);
 
+    // le e armazena os metadados do disco (tamanho e lastmodification)
+    Metadata m;
+
+    if (!this->file_.read(reinterpret_cast<char*>(&m), sizeof(Metadata))) {
+        this->file_.clear();
+        return false;
+    }
+    // variaveis que verificam se o cache tem os mesmos metadados
+    bool const sameModificationTime =
+        (m.lastModification == input.lastModification());
+    bool const sameSize = (m.size == input.size());
+
+    // retorna verdadeiro se eles tem os mesmos metadados, falso se nao
+    return sameModificationTime && sameSize;
+}
+
+void BTreeFile::WriteNode(std::fstream& file, uint64_t nodeIndex,
+                          const Node& node) {
+    file.seekp(GetNodeOffset(nodeIndex));
+    file.write(reinterpret_cast<const char*>(&node), sizeof(Node));
+}
+
+bool BTreeFile::ReadNode(std::istream& file, uint64_t nodeIndex, Node& node) {
+    std::streamoff const offset = GetNodeOffset(nodeIndex);
+
+    file.seekg(offset, std::ios::beg);
+
+    file.read(reinterpret_cast<char*>(&node), sizeof(Node));
+
+    return !file.fail();
+}
+
+uint64_t BTreeFile::AppendNode(std::fstream& file, const Node& node,
+                               uint64_t& lastNodeIndex) {
+    lastNodeIndex++;
+
+    WriteNode(file, lastNodeIndex, node);
 
     return lastNodeIndex;
 }
+
+std::optional<BTreeFile::Node> BTreeFile::Search(int key) {
+    if (rootIndex_ < 0) {
+        return std::nullopt;
+    }
+
+    int64_t currentIndex = rootIndex_;
+    Node currentNode;
+    bool found = false;
+    size_t idx = 0;
+
+    while (currentIndex >= 0) {
+        // lê um novo nó a partir do indice
+        if (!ReadNode(this->file_, static_cast<uint64_t>(currentIndex),
+                      currentNode)) {
+            return std::nullopt;
+        }
+        // Busca a chave dentro do nó
+        idx = FindKeyIndex(currentNode, key, found);
+        // Achou? retorna o nó atual
+        if (found) {
+            return currentNode;
+        }
+        // Se não encontrou o item e o nó for folha o item não existe
+        if (currentNode.isLeaf()) {
+            return std::nullopt;
+        }
+        // se não continua caminhando pelos nós
+        currentIndex = currentNode.nodePos[idx];
+    }
+    return std::nullopt;
+}
+
+}  // namespace Algorithm::BTree

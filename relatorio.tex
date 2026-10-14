@@ -92,10 +92,10 @@
     \vfill
 
     {\large \textbf{Autores:}}\\[0.25cm]
-    Kaio Alves Simões
-    Luiz Henrique Silva Sampaio
-    Victor Kangussu
-    Vinícius Brandão
+    Kaio Alves Simões\\[0.15cm]
+    Luiz Henrique Silva Sampaio\\[0.15cm]
+    Victor Kangussu\\[0.15cm]
+    Vinícius Brandão\\[0.8cm]
 
     {\large \textbf{Professor:}}\\[0.25cm]
     Prof. Guilherme Tavares de Assis
@@ -292,17 +292,17 @@ A Tabela~\ref{tab:bench_isa} consolida as medições obtidas pelo método ISA em
 \cmidrule(lr){4-6} \cmidrule(lr){9-11}
 \textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} \\
 \midrule
-Ascendente & Cold & 20                 &    0.35 &    0.37 &    0.46 &     1 &     0 &    0.04 &    0.04 &    0.09 &     2 &    10 \\
-Ascendente & Cold & 2.000           &    1.18 &    1.24 &    1.50 &    20 &     0 &    0.06 &    0.07 &    0.09 &     6 &    48 \\
-Ascendente & Cold & 20.000         &    8.63 &    9.02 &   10.56 &   200 &     0 &    0.07 &    0.08 &    0.10 &     9 &    58 \\
-Ascendente & Cold & 200.000       &   84.19 &   87.05 &  110.95 & 2.000 &     0 &    0.08 &    0.09 &    0.10 &    12 &    57 \\
-Ascendente & Cold & 2.000.000   & 17936.20 & 17951.80 & 18003.01 & 20.000 &     0 &    0.09 &    0.32 &    1.30 &    15 &    72 \\
+Ascendente & Cold & 20                         &    0.35 &    0.37 &    0.46 &     1 &     0 &    0.04 &    0.04 &    0.09 &     2 &    10 \\
+Ascendente & Cold & 2.000                &    1.18 &    1.24 &    1.50 &    20 &     0 &    0.06 &    0.07 &    0.09 &     6 &    48 \\
+Ascendente & Cold & 20.000             &    8.63 &    9.02 &   10.56 &   200 &     0 &    0.07 &    0.08 &    0.10 &     9 &    58 \\
+Ascendente & Cold & 200.000          &   84.19 &   87.05 &  110.95 & 2.000 &     0 &    0.08 &    0.09 &    0.10 &    12 &    57 \\
+Ascendente & Cold & 2.000.000    & 17936.20 & 17951.80 & 18003.01 & 20.000 &     0 &    0.09 &    0.32 &    1.30 &    15 &    72 \\
 \midrule
-Ascendente & Warm & 20                 &    0.02 &    0.02 &    0.04 &     1 &     0 &    0.28 &    0.30 &    0.42 &     2 &    12 \\
-Ascendente & Warm & 2.000           &    0.02 &    0.02 &    0.05 &     1 &     0 &    0.32 &    0.34 &    0.38 &     5 &    54 \\
-Ascendente & Warm & 20.000         &    0.02 &    0.02 &    0.05 &     1 &     0 &    0.32 &    0.34 &    0.44 &     9 &    56 \\
-Ascendente & Warm & 200.000       &    0.02 &    0.02 &    0.05 &     1 &     0 &    0.33 &    0.35 &    0.39 &    12 &    57 \\
-Ascendente & Warm & 2.000.000   &    0.02 &    0.02 &    0.03 &     1 &     0 &    0.34 &    0.36 &    1.15 &    15 &    68 \\
+Ascendente & Warm & 20                         &    0.02 &    0.02 &    0.04 &     1 &     0 &    0.28 &    0.30 &    0.42 &     2 &    12 \\
+Ascendente & Warm & 2.000                &    0.02 &    0.02 &    0.05 &     1 &     0 &    0.32 &    0.34 &    0.38 &     5 &    54 \\
+Ascendente & Warm & 20.000             &    0.02 &    0.02 &    0.05 &     1 &     0 &    0.32 &    0.34 &    0.44 &     9 &    56 \\
+Ascendente & Warm & 200.000          &    0.02 &    0.02 &    0.05 &     1 &     0 &    0.33 &    0.35 &    0.39 &    12 &    57 \\
+Ascendente & Warm & 2.000.000    &    0.02 &    0.02 &    0.03 &     1 &     0 &    0.34 &    0.36 &    1.15 &    15 &    68 \\
 \midrule
 Descendente & Cold/Warm & Todos & \multicolumn{10}{c}{\textit{Não suportado (operação rejeitada por violação de ordenação)}} \\
 Desordenado & Cold/Warm & Todos & \multicolumn{10}{c}{\textit{Não suportado (operação rejeitada por violação de ordenação)}} \\
@@ -356,7 +356,7 @@ Dada a chave procurada $K$:
 \end{enumerate}
 
 \paragraph{Sensibilidade à Ordenação e Degeneração:}
-Por se tratar de uma árvore binária sem rebalanceamento automático (AVL ou Rubro-Negra), o algoritmo exibe extrema sensibilidade à ordem dos dados de entrada:
+Por se tratar de uma árvore binária sem rebalanceamento automático, o algoritmo exibe extrema sensibilidade à ordem dos dados de entrada:
 \begin{itemize}
     \item \textbf{Arquivo Ordenado (Ascendente ou Descendente):} A estrutura degenera completamente em uma lista linear encadeada de altura $h = N$. Cada inserção e cada busca passa a demandar $O(N)$ leituras de disco, provocando volumoso tráfego de I/O e degradação severa de desempenho;
     \item \textbf{Arquivo Desordenado (Aleatório):} A estrutura tende a um comportamento balanceado médio de altura $h \approx O(\log_2 N)$, reduzindo consideravelmente as leituras.
@@ -378,40 +378,40 @@ A Tabela~\ref{tab:bench_binary_tree} sintetiza os resultados de benchmark da Ár
 \cmidrule(lr){4-6} \cmidrule(lr){9-11}
 \textbf{Situação} & \textbf{Regime} & \textbf{Qtd ($N$)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} & \textbf{p50} & \textbf{p75} & \textbf{p99} & \textbf{(p50)} & \textbf{(p50)} \\
 \midrule
-Ascendente  & Cold & 20                &    0.56 &    0.58 &    0.74 &   103 &   201 &    0.04 &    0.04 &    0.12 &     8 &    25 \\
-Ascendente  & Cold & 2.000          & 1219.13 & 1222.13 & 1241.25 & 1.000.022 & 2.000.001 &    0.90 &    1.22 &    1.51 &   550 & 1.146 \\
+Ascendente  & Cold & 20                        &    0.50 &    0.51 &    0.56 &   103 &   201 &    0.03 &    0.04 &    0.06 &     7 &    21 \\
+Ascendente  & Cold & 2.000               & 1383.97 & 1388.12 & 1400.48 & 1.000.022 & 2.000.001 &    0.84 &    1.20 &    1.57 &   486 & 1.033 \\
 Ascendente  & Cold & 20.000    &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 20000)
 Ascendente  & Cold & 200.000   &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 200000)
 Ascendente  & Cold & 2.000.000 &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 2000000)
 \midrule
-Ascendente  & Warm & 20                &    0.02 &    0.02 &    0.03 &     1 &     0 &    0.28 &    0.31 &    0.35 &     7 &    21 \\
-Ascendente  & Warm & 2.000          &    0.03 &    0.03 &    0.05 &     1 &     0 &    1.12 &    1.38 &    1.73 &   528 & 1.090 \\
+Ascendente  & Warm & 20                        &    0.02 &    0.02 &    0.02 &     1 &     0 &    0.22 &    0.23 &    0.27 &     7 &    22 \\
+Ascendente  & Warm & 2.000               &    0.02 &    0.02 &    0.04 &     1 &     0 &    0.93 &    1.35 &    1.77 &   444 &   926 \\
 Ascendente  & Warm & 20.000    &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 20000)
 Ascendente  & Warm & 200.000   &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 200000)
 Ascendente  & Warm & 2.000.000 &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 2000000)
 \midrule
-Descendente & Cold & 20                &    0.55 &    0.57 &    0.64 &   103 &   201 &    0.04 &    0.04 &    0.07 &     6 &    22 \\
-Descendente & Cold & 2.000          & 1262.88 & 1267.60 & 1287.28 & 1.000.022 & 2.000.001 &    0.77 &    1.12 &    1.56 &   458 &   970 \\
+Descendente & Cold & 20                        &    0.49 &    0.50 &    0.57 &   103 &   201 &    0.03 &    0.03 &    0.05 &     7 &    21 \\
+Descendente & Cold & 2.000               & 1390.51 & 1393.18 & 1415.33 & 1.000.022 & 2.000.001 &    0.87 &    1.28 &    1.53 &   529 & 1.088 \\
 Descendente & Cold & 20.000    &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 20000)
 Descendente & Cold & 200.000   &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 200000)
 Descendente & Cold & 2.000.000 &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 2000000)
 \midrule
-Descendente & Warm & 20                &    0.02 &    0.02 &    0.04 &     1 &     0 &    0.29 &    0.31 &    0.36 &     6 &    20 \\
-Descendente & Warm & 2.000          &    0.03 &    0.03 &    0.06 &     1 &     0 &    1.16 &    1.50 &    1.80 &   528 & 1.086 \\
+Descendente & Warm & 20                        &    0.02 &    0.02 &    0.02 &     1 &     0 &    0.22 &    0.23 &    0.28 &     7 &    24 \\
+Descendente & Warm & 2.000               &    0.02 &    0.02 &    0.03 &     1 &     0 &    1.05 &    1.41 &    1.76 &   530 & 1.086 \\
 Descendente & Warm & 20.000    &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 20000)
 Descendente & Warm & 200.000   &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 200000)
 Descendente & Warm & 2.000.000 &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 2000000)
 \midrule
-Desordenado & Cold & 20                &    0.52 &    0.54 &    0.64 &    75 &   145 &    0.04 &    0.04 &    0.06 &     6 &    17 \\
-Desordenado & Cold & 2.000          &  199.52 &  200.24 &  203.58 & 157.070 & 314.097 &    0.13 &    0.33 &    0.62 &    19 &   116 \\
-Desordenado & Cold & 20.000        & 4025.68 & 4038.24 & 4066.75 & 3.152.157 & 6.303.911 &    0.13 &    0.40 &    1.57 &    24 &   122 \\
-Desordenado & Cold & 200.000      & 11770.30 & 11821.52 & 12120.32 & 8.651.759 & 17.299.515 &    0.12 &    0.14 &    0.76 &    27 &   110 \\
+Desordenado & Cold & 20                        &    0.44 &    0.44 &    0.51 &    67 &   129 &    0.03 &    0.03 &    0.03 &     6 &    20 \\
+Desordenado & Cold & 2.000               &  142.27 &  151.80 &  153.84 & 104.687 & 209.331 &    0.08 &    0.15 &    0.49 &    18 &   101 \\
+Desordenado & Cold & 20.000            & 1257.67 & 1260.67 & 1271.47 & 836.366 & 1.672.329 &    0.09 &    0.13 &    0.39 &    24 &   117 \\
+Desordenado & Cold & 200.000         & 9295.27 & 9312.37 & 9379.65 & 5.857.329 & 11.710.655 &    0.09 &    0.10 &    0.23 &    25 &   104 \\
 Desordenado & Cold & 2.000.000 &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 2000000)
 \midrule
-Desordenado & Warm & 20                &    0.02 &    0.02 &    0.05 &     1 &     0 &    0.29 &    0.32 &    0.39 &     6 &    21 \\
-Desordenado & Warm & 2.000          &    0.03 &    0.03 &    0.05 &     1 &     0 &    0.36 &    0.42 &    0.85 &    17 &    98 \\
-Desordenado & Warm & 20.000        &    0.03 &    0.03 &    0.03 &     1 &     0 &    0.40 &    0.57 &    1.68 &    24 &   121 \\
-Desordenado & Warm & 200.000      &    0.03 &    0.03 &    0.06 &     1 &     0 &    0.38 &    0.40 &    0.90 &    26 &   102 \\
+Desordenado & Warm & 20                        &    0.02 &    0.02 &    0.04 &     1 &     0 &    0.22 &    0.23 &    0.29 &     5 &    18 \\
+Desordenado & Warm & 2.000               &    0.02 &    0.02 &    0.04 &     1 &     0 &    0.29 &    0.36 &    0.76 &    26 &   118 \\
+Desordenado & Warm & 20.000            &    0.02 &    0.02 &    0.03 &     1 &     0 &    0.29 &    0.32 &    0.57 &    26 &   113 \\
+Desordenado & Warm & 200.000         &    0.02 &    0.02 &    0.04 &     1 &     0 &    0.29 &    0.30 &    0.38 &    26 &   106 \\
 Desordenado & Warm & 2.000.000 &  - & - & - & - & - & - & - & - & - & - \\ % (Timeout 2000000)
 \bottomrule
 \end{tabular}%
@@ -419,7 +419,9 @@ Desordenado & Warm & 2.000.000 &  - & - & - & - & - & - & - & - & - & - \\ % (Ti
 \end{table}
 
 \paragraph{Discussão dos Resultados:}
-\textit{[Espaço para análise do comportamento observado: comparar o colapso de desempenho nos casos ordenados (ascendente/descendente) devido à degeneração linear contra a eficiência proporcional a $\log_2 N$ no caso desordenado. Destacar também a diferença brutal de tempo entre o regime Cold (com acessos randômicos não sequenciais no disco) e o regime Warm.]}
+Os resultados apresentados na Tabela~\ref{tab:bench_binary_tree} evidenciam o impacto direto da ausência de um sistema de balanceamento na Árvore Binária de Pesquisa Externa. Nas Situações~1 (Ascendente) e~2 (Descendente), a inserção sequencial das chaves direciona todos os nós para um único ramo, degenerando a estrutura em uma lista encadeada linear de altura $h = O(N)$. Com isso, a inserção de cada novo elemento exige percorrer e ler sequencialmente todos os nós anteriores no arquivo (\texttt{.binarytree}), elevando o custo de construção no regime \textit{Cold Start} à complexidade quadrática $O(N^2)$ em tempo, comparações e leituras de disco. Esse comportamento é comprovado experimentalmente para $N = 2.000$, onde foram necessárias $1.000.022$ leituras e $2.000.001$ comparações (tempo mediano de $\approx 1{,}39\,\text{s}$). Essa explosão de operações de I/O inviabiliza as entradas maiores ($N \in \{20.000, \, 200.000, \, 2.000.000\}$), fazendo com que a execução ultrapasse o tempo limite e sofra invariavelmente de \textit{timeout}. Na fase de pesquisa, a degeneração também impõe um custo linear $O(N)$, demandando cerca de 500 leituras de disco para localizar uma chave em $N = 2.000$.
+
+Em contrapartida, na Situação~3 (Desordenado), a distribuição aleatória das chaves preserva uma altura média proporcional a $O(\log_2 N)$, viabilizando a construção até $N = 200.000$ e mantendo a pesquisa eficiente, com apenas 18 a 25 leituras de disco e latência inferior a $0{,}10\,\text{ms}$ a frio. No entanto, para $N = 2.000.000$, a sobrecarga de I/O em acessos aleatórios disco a disco também culmina em \textit{timeout}. Por fim, no regime \textit{Warm Start}, a reutilização do índice persistente pré-existente reduz o pré-processamento a uma única leitura de validação de metadados ($R = 1$) e apenas $0{,}02\,\text{ms}$, demonstrando a plena amortização do custo de construção nos cenários em que o arquivo foi previamente gerado.
 
 % ------------------------------------------------------------------------------
 % 3.3 Árvore B

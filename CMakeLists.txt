@@ -51,7 +51,6 @@ set(SEARCH_SOURCES
     src/BinaryTree/BTree.cpp
     src/BTree/BTree.cpp
     src/BTree/BTreeFile.cpp
-    src/BTree/BTreeMemory.cpp
     src/BStarTree/BStarTree.cpp
     src/BStarTree/BStarTreeMemory.cpp
     src/BStarTree/IBStarTreeData.cpp

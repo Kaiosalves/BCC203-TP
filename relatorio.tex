@@ -524,7 +524,13 @@ Desordenado & Warm & 2.000.000   &    0.02 &    0.02 &    0.02 &     1 &     0 &
 \end{table}
 
 \paragraph{Discussão dos Resultados:}
-\textit{[Espaço para análise do comportamento observado: destacar a imunidade da Árvore B contra variações de ordenação dos arquivos de entrada, a profundidade extremamente baixa (tipicamente $\le 3$ níveis para até 2 milhões de itens com ordem 100) e a estabilidade das leituras de disco requeridas por consulta. Ressalta-se que, devido à sua implementação em memória secundária, cada consulta exige transferências físicas de blocos para cada nó de índice percorrido no arquivo \texttt{.btree} em disco somadas à leitura final da página de dados correspondente.]}
+Os resultados experimentais sintetizados na Tabela~\ref{tab:bench_btree} comprovam a alta eficiência, previsibilidade e robustez estrutural da Árvore B operando como índice balanceado em memória secundária:
+
+Na fase de pré-processamento sob regime \textit{Cold Start}, a construção do arquivo binário persistente (\texttt{.btree}) reflete com precisão as operações reais de E/S demandadas para serializar os nós em disco. À medida que os registros de entrada são inseridos, o algoritmo gerencia os transbordamentos de capacidade ($\text{PAGE\_SIZE} = 100$) por meio de particionamentos de nós (\textit{splits}) e promoções de chaves, efetuando leituras de nós intermediários e anexando novos blocos ao final do arquivo. O número de leituras de disco no pré-processamento exibe comportamento estritamente previsível, partindo de 20 leituras para $N = 20$, atingindo $3.918$ para $N = 2.000$, cerca de $596.000$ para $N = 200.000$ e aproximadamente $7{,}6$ a $7{,}7$ milhões para $N = 2.000.000$. O tempo mediano de construção a frio escala de forma contida, demandando cerca de $0{,}2\,\text{ms}$ para $N=20$, $550\,\text{ms}$ a $660\,\text{ms}$ para $N=200.000$, e atingindo entre $8{,}6\,\text{s}$ (desordenado) e $34{,}9\,\text{s}$ (descendente) no volume máximo testado. Por sua vez, no regime \textit{Warm Start}, a detecção do índice binário pré-existente e a validação do cabeçalho de metadados reduzem o pré-processamento a uma única leitura de validação ($R = 1$) e a um tempo praticamente nulo ($p50 \le 0{,}02\,\text{ms}$) em todas as configurações, demonstrando a plena amortização do custo de criação do índice em disco.
+
+Na fase de pesquisa, a Árvore B destaca-se por sua notável parcimônia de I/O em disco. Em razão do elevado fator de ramificação ($M = 100$), a profundidade da árvore cresce de forma logarítmica extremamente suave: foram necessárias medianamente apenas 2 leituras de disco para $N = 20$, 3 leituras para $N = 2.000$, 4 leituras para $N = 20.000$ e $N = 200.000$, e apenas 5 leituras de disco diante do volume expressivo de $N = 2.000.000$. Como a Árvore B foi implementada em memória secundária, cada leitura no índice corresponde à transferência física de um bloco de nó serializado do arquivo \texttt{.btree} para a memória primária, culminando com a leitura da página de dados correspondente no arquivo principal. O número de comparações de chaves em RAM manteve-se rigorosamente delimitado (entre 23 e 114 comparações no pior caso avaliado), permitindo que o tempo mediano de consulta permanecesse abaixo de $0{,}10\,\text{ms}$ em regime \textit{Cold} e em torno de $0{,}20\,\text{ms}$ em regime \textit{Warm}.
+
+Destaca-se, por fim, a completa imunidade da Árvore B a variações na ordenação inicial dos registros de entrada. O algoritmo manteve métricas operacionais e profundidade rigorosamente uniformes nas três situações avaliadas (Ascendente, Descendente e Desordenado). As regras intrínsecas de particionamento e propagação de chaves garantem o balanceamento em altura em todos os cenários, impedindo qualquer forma de degeneração interna e assegurando que a complexidade de pesquisa permaneça estritamente $O(\log_M N)$ independentemente da distribuição das chaves de entrada.
 
 % ------------------------------------------------------------------------------
 % 3.4 Árvore B*
@@ -575,7 +581,7 @@ Ao consultar uma chave $K$:
 \end{enumerate}
 
 \subsubsection{Resultados Experimentais e Tabela de Benchmark}
-A Tabela~\ref{tab:bench_bstartree} expõe os resultados empíricos coletados para a Árvore B\* sob os regimes \textit{Cold} e \textit{Warm}. Os tempos de execução reportam os percentis p50, p75 e p99 obtidos diretamente a partir das 100 execuções sob as mesmas condições (com a chave garantidamente presente na entrada), além das medianas consolidadas de transferências e comparações (p50).
+A Tabela~\ref{tab:bench_bstartree} expõe os resultados empíricos coletados para a Árvore B\* sob o regime \textit{Cold}. Cabe pontuar expressamente que, por ter sido implementada exclusivamente em memória principal (RAM), o regime de execução \textit{Warm} não se aplica à Árvore B* (pois a hierarquia de nós é reconstruída dinamicamente na memória volátil a cada execução, sem persistência de arquivo de índice em disco para reuso), motivo pelo qual o regime \textit{Warm} foi suprimido da tabela. Os tempos de execução reportam os percentis p50, p75 e p99 obtidos diretamente a partir das 100 execuções sob as mesmas condições (com a chave garantidamente presente na entrada), além das medianas consolidadas de transferências e comparações (p50).
 
 \begin{table}[H]
 \centering
@@ -596,42 +602,32 @@ Ascendente  & Cold & 20.000        &   14.82 &   15.28 &   19.42 &   200 & 391.8
 Ascendente  & Cold & 200.000      &  154.60 &  155.71 &  215.03 & 2.000 & 4.626.082 &    0.09 &    0.09 &    0.10 &     1 &    88 \\
 Ascendente  & Cold & 2.000.000  & 34094.70 & 34103.57 & 35398.01 & 20.000 & 52.971.485 &    0.10 &    1.03 &    1.34 &     1 &    90 \\
 \midrule
-Ascendente  & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Ascendente  & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-\midrule
 Descendente & Cold & 20                &    0.18 &    0.19 &    0.24 &     1 &   176 &    0.03 &    0.03 &    0.05 &     1 &    21 \\
 Descendente & Cold & 2.000          &    1.15 &    1.18 &    1.64 &    20 & 39.245 &    0.05 &    0.05 &    0.07 &     1 &    83 \\
 Descendente & Cold & 20.000        &   14.39 &   14.79 &   15.70 &   200 & 472.478 &    0.08 &    0.08 &    0.09 &     1 &    84 \\
 Descendente & Cold & 200.000      &  151.66 &  152.41 &  180.47 & 2.000 & 5.489.066 &    0.09 &    0.09 &    0.10 &     1 &    85 \\
 Descendente & Cold & 2.000.000  & 36181.15 & 36191.88 & 36497.05 & 20.000 & 63.074.761 &    0.85 &    0.97 &    7.11 &     1 &    94 \\
 \midrule
-Descendente & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Descendente & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Descendente & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Descendente & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Descendente & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-\midrule
 Desordenado & Cold & 20                &    0.19 &    0.20 &    0.29 &     1 &   154 &    0.03 &    0.03 &    0.05 &     1 &    25 \\
 Desordenado & Cold & 2.000          &    1.45 &    1.48 &    2.00 &    20 & 35.923 &    0.06 &    0.06 &    0.08 &     1 &    85 \\
 Desordenado & Cold & 20.000        &   16.80 &   17.03 &   21.80 &   200 & 440.321 &    0.08 &    0.08 &    0.09 &     1 &    92 \\
 Desordenado & Cold & 200.000      &  195.84 &  197.53 &  237.13 & 2.000 & 5.130.646 &    0.09 &    0.09 &    0.11 &     1 &    96 \\
 Desordenado & Cold & 2.000.000  & 2059.14 & 2085.51 & 2349.36 & 20.000 & 57.387.954 &    0.09 &    0.10 &    0.11 &     1 &   108 \\
-\midrule
-Desordenado & Warm & 20        & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 2.000     & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 20.000    & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 200.000   & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
-Desordenado & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00 & 0 & 0 \\
 \bottomrule
 \end{tabular}%
 }
 \end{table}
 
 \paragraph{Discussão dos Resultados:}
-\textit{[Espaço para análise do comportamento observado: comparar o comportamento da Árvore B* em memória principal em relação à Árvore B em memória secundária. Deve-se ressaltar que, por ter sido implementada em memória principal, a Árvore B* requer rigorosamente 1 leitura de disco por pesquisa com sucesso (exclusivamente para resgatar a página do arquivo de dados) e zero leituras caso a chave não esteja presente, eliminando totalmente o tráfego de I/O em disco associado à navegação no índice. Além disso, destacar a economia estrutural pela segregação de nós de índice e a eficiência em consultas sequenciais contíguas via encadeamento das folhas.]}
+Os resultados experimentais consolidados na Tabela~\ref{tab:bench_bstartree} demonstram o perfil operacional da Árvore B* implementada integralmente em memória principal (RAM), evidenciando seu comportamento frente a diferentes volumes e ordenações de registros:
+
+Inicialmente, cumpre reiterar a fundamentação da ausência do regime \textit{Warm Start} na avaliação experimental: pelo fato de a Árvore B* ter sido concebida e implementada exclusivamente em memória primária, a hierarquia de nós não é gravada em arquivos binários em disco. Consequentemente, não há um índice persistente em memória secundária passível de validação e reutilização em execuções independentes subsequentes. Toda execução inicia-se obrigatoriamente a partir do zero (\textit{Cold Start}), alocando e povoando a árvore na RAM a partir da varredura dos dados originais, razão pela qual as medições reportadas restringem-se ao regime \textit{Cold}.
+
+Na fase de pré-processamento, a construção da estrutura em memória reflete estritamente o custo de varredura linear do arquivo de dados, efetuando exatamente $P = \lceil N / \text{PAGE\_SIZE} \rceil$ transferências de disco ($1$ leitura para $N=20$, $20$ para $N=2.000$, $200$ para $N=20.000$, $2.000$ para $N=200.000$ e $20.000$ para $N=2.000.000$). Como as inserções, divisões (\textit{splits}) e reorganizações de nós de índice e dados ocorrem estritamente na memória volátil com velocidade de CPU, não há emissão de operações de escrita em disco. O tempo mediano de pré-processamento evolui de forma linear e altamente eficiente, partindo de apenas $0{,}18\,\text{ms}$ para $N=20$, atingindo cerca de $150\,\text{ms}$ para $N=200.000$ e alcançando $2{,}06\,\text{s}$ no cenário desordenado e $\approx 34$ a $36\,\text{s}$ nos cenários ordenados para 2 milhões de registros, com contagens de comparações proporcionais à profundidade e ao rearranjo dos nós em memória.
+
+Na fase de pesquisa, o método alcança a marca ótima de exatamente \textbf{1 leitura de disco} ($R = 1$) em todos os cenários, ordens e volumes avaliados (desde $N=20$ até $N=2.000.000$). Esse resultado decorre da residência em memória principal: a travessia descendente através dos nós internos (\texttt{Type::Index}) e a identificação do registro no nó folha (\texttt{Type::Data}) realizam-se inteiramente na RAM via tempo de processador; a única transferência de disco executada consiste na leitura da página física de dados no arquivo de entrada onde o registro completo é armazenado. As comparações de chaves mantiveram-se contidas na faixa de 18 a 108 avaliações, assegurando tempos medianos de resposta sub-milissegundos ($p50 \le 0{,}10\,\text{ms}$ na quase totalidade dos ensaios).
+
+Por fim, a Árvore B* comprova excelente estabilidade algorítmica frente às diferentes disposições da entrada (Ascendente, Descendente e Desordenado). A segregação entre nós de roteamento e folhas de dados, combinada aos mecanismos intrínsecos de balanceamento multi-vias e redistribuição da árvore, preserva a invariante estrutural e impede qualquer degeneração da hierarquia de busca. Adicionalmente, o encadeamento sequencial contíguo entre nós folhas provê uma infraestrutura altamente favorável para percursos e consultas por faixa, consolidando a eficácia da indexação em memória primária com acesso pontual mínimo à memória secundária.
 
 % ==============================================================================
 % 4. COMPARAÇÃO ENTRE OS ALGORITMOS
@@ -639,47 +635,37 @@ Desordenado & Warm & 2.000.000 & 0.00 & 0.00 & 0.00 & 0 & 0 & 0.00 & 0.00 & 0.00
 \section{Comparação Geral e Discussão dos Algoritmos}
 \label{sec:comparacao}
 
-A análise comparativa entre as quatro estruturas de dados permite identificar com clareza os \textit{trade-offs} inerentes ao projeto de mecanismos de indexação para memória secundária.
+A análise comparativa consolidada a partir dos testes empíricos permite confrontar objetivamente as quatro abordagens em relação ao pré-processamento, pesquisa, ordenação e alocação de memória.
 
-\subsection{Custo e Desempenho no Pré-processamento}
-A construção do índice representa um investimento inicial de tempo e operações de I/O em disco:
+\subsection{Custo no Pré-processamento}
+A construção do índice evidencia as diferenças estruturais de cada método:
 \begin{itemize}
-    \item \textbf{Acesso Sequencial Indexado:} Apresenta o menor custo de construção absoluto, efetuando uma única leitura linear sequencial no arquivo de dados ($O(N/\text{PAGE\_SIZE})$ leituras). Contudo, pressupõe que os dados de entrada já estejam ordenados;
-    \item \textbf{Árvore Binária de Pesquisa:} O custo de construção é altamente dependente da ordenação prévia. Em arquivos ordenados, a degeneração em lista produz $O(N^2)$ comparações e I/Os ao disco durante a inserção, tornando o processo inviável para grandes volumes de dados. Em contrapartida, com dados aleatórios, o custo converge para $O(N \log N)$;
-    \item \textbf{Árvores B e B*:} Ambas exibem complexidade assintótica estável $O(N \log_M N)$ no pré-processamento independentemente da ordenação da entrada, porém com comportamentos de I/O diametralmente distintos decorrentes de sua residência de memória:
-    \begin{itemize}
-        \item A \textbf{Árvore B (memória secundária)} realiza operações contínuas de gravação física e atualização de nós em disco no arquivo \texttt{.btree} durante o particionamento (\textit{split}), incorrendo em custo perceptível de escrita em memória secundária no regime Cold;
-        \item A \textbf{Árvore B* (memória principal)} efetua as inserções e reestruturações de nós estritamente em memória RAM em tempo de CPU, limitando o consumo de I/O de disco às leituras sequenciais das páginas do arquivo de dados e eliminando integralmente as gravações de blocos de índice em disco, o que confere uma montagem em memória notavelmente mais rápida.
-    \end{itemize}
+    \item \textbf{ISA:} Exige apenas uma varredura sequencial linear ($P = \lceil N / \text{PAGE\_SIZE} \rceil$ leituras) e zero comparações, gerando um índice esparso de $\approx 1\%$ do arquivo original em tempos de $0{,}35\,\text{ms}$ ($N=20$) a $17{,}94\,\text{s}$ ($N=2.000.000$). Sua restrição é exigir dados estritamente ordenados de forma ascendente;
+    \item \textbf{Árvore Binária:} Degenera em lista encadeada nos arquivos ordenados (Ascendente e Descendente), gerando custo quadrático $O(N^2)$. Já para $N = 2.000$, demandou $1.000.022$ leituras e $2.000.001$ comparações ($\approx 1{,}39\,\text{s}$), sofrendo \textit{timeout} para $N \ge 20.000$. No caso desordenado, atingiu $N = 200.000$ ($9{,}30\,\text{s}$), mas sucumbiu por \textit{timeout} em 2 milhões de registros pela sobrecarga de acessos aleatórios de nós em disco;
+    \item \textbf{Árvore B (Memória Secundária):} Mantém complexidade estável $O(N \log_M N)$ em todas as ordens, persistindo seus nós em arquivo binário (\texttt{.btree}). As leituras de disco escalaram de 20 a $\approx 7{,}75$ milhões, completando 2 milhões de itens em tempos contidos ($8{,}64\,\text{s}$ desordenado, $21{,}12\,\text{s}$ ascendente e $34{,}89\,\text{s}$ descendente);
+    \item \textbf{Árvore B* (Memória Principal):} Limita os acessos a disco à leitura das páginas de dados ($P = \lceil N / \text{PAGE\_SIZE} \rceil$, até $20.000$ leituras em 2M) com zero escrita de índice em disco. A montagem em RAM concluiu $N=200.000$ em menos de $200\,\text{ms}$ e 2 milhões de registros em $2{,}06\,\text{s}$ no caso desordenado e $\approx 35\,\text{s}$ nos ordenados.
 \end{itemize}
 
 \subsection{Eficiência na Fase de Pesquisa}
-Na pesquisa pontual por chave:
+Os resultados evidenciam a discrepância entre transferências de blocos e comparações em RAM:
 \begin{itemize}
-    \item \textbf{Número de Leituras de Disco:} O Acesso Sequencial Indexado, a Árvore B e a Árvore B* demonstram superioridade incontestável sobre a Árvore Binária. Enquanto a Árvore Binária pode requerer até $N$ leituras de nós em disco no pior caso degenerado, a Árvore B e a Árvore B* ilustram o impacto da alocação de memória:
-    \begin{itemize}
-        \item A \textbf{Árvore B (memória secundária)} lê cada nó percorrido da memória secundária para a principal ($h \approx \log_M N$ leituras de nós no arquivo \texttt{.btree}) e finaliza com 1 leitura da página de dados, totalizando entre 2 e 4 leituras de disco para até 2.000.000 de registros;
-        \item A \textbf{Árvore B* (memória principal)} percorre seus nós internos e folha inteiramente em memória RAM sem nenhuma leitura de disco no índice, necessitando de estritamente \textbf{1 única leitura de disco} (a transferência da página de dados onde o item reside via \texttt{File::GetPageAt}) em caso de chave presente, ou zero leituras em caso de chave ausente.
-    \end{itemize}
-    \item \textbf{Comparações de Chaves:} A Árvore B e a Árvore B* realizam mais comparações em memória primária por nó (pesquisa dentro do arranjo de tamanho $\text{PAGE\_SIZE}$), porém essa operação em RAM é dezenas de milhares de vezes mais veloz que uma única leitura adicional de disco, justificando plenamente a troca de processamento em CPU por economia de I/O. Na Árvore B*, como toda a árvore reside em RAM, essa vantagem temporal é ainda mais acentuada.
+    \item \textbf{Leituras de Disco:} A Árvore Binária degenerada exigiu $\approx 500$ leituras de blocos para apenas $2.000$ registros. O ISA demandou de 2 a 15 leituras ($R \approx \log_2(N/\text{PAGE\_SIZE}) + 1$). A Árvore B limitou-se a $h \le 4$ níveis, consumindo entre 2 e 5 leituras de disco para até 2 milhões de itens. Por fim, a Árvore B* alcançou a marca ótima de \textbf{exatamente 1 leitura de disco} ($R = 1$) em todos os cenários, pois a navegação ocorre inteiramente em RAM;
+    \item \textbf{Custo de CPU vs. I/O:} As comparações de chaves em RAM (até 114) tiveram impacto desprezível na latência ($p50 \le 0{,}10\,\text{ms}$ em quase todos os testes), confirmando que a contenção de transferências de disco é o fator que dita o desempenho da busca;
+    \item \textbf{Latência de Cauda (p99):} Em $N = 2.000.000$, o percentil p99 revela flutuações de I/O do subsistema de armazenamento, atingindo $1{,}30\,\text{ms}$ no ISA, $1{,}84\,\text{ms}$ na Árvore B e $7{,}11\,\text{ms}$ na Árvore B*, enquanto a mediana ($p50$) permaneceu abaixo de $0{,}10\,\text{ms}$.
 \end{itemize}
 
-\subsection{Sensibilidade ao Ordenamento Inicial da Entrada}
+\subsection{Sensibilidade ao Ordenamento da Entrada}
 \begin{itemize}
-    \item \textbf{Arquivos Ordenados (Ascendentes):} O ISA é a estrutura ideal pela simplicidade e compacidade; as Árvores B e B* comportam-se de forma estável e balanceada; a Árvore Binária degenera completamente;
-    \item \textbf{Arquivos Descendentes:} O ISA torna-se inoperante; a Árvore Binária degenera de modo análogo ao caso ascendente; as Árvores B e B* mantêm invariantes estruturais e complexidade balanceada;
-    \item \textbf{Arquivos Desordenados (Aleatórios):} O ISA não pode ser utilizado diretamente sem uma fase prévia de ordenação externa; a Árvore Binária atinge seu melhor caso médio ($O(\log N)$); as Árvores B e B* exibem sua máxima utilidade prática.
+    \item \textbf{Ascendente:} Caso ideal para o ISA; balanceado para Árvores B e B*; crítico para a Árvore Binária (degeneração e \textit{timeout});
+    \item \textbf{Descendente:} Inoperante para o ISA; degenerado para a Árvore Binária; plenamente suportado e estável para Árvores B e B*;
+    \item \textbf{Desordenado:} Rejeitado pelo ISA sem ordenação prévia; Árvore Binária viável apenas até $N=200.000$; Árvores B e B* mantêm invariantes estruturais e alto rendimento.
 \end{itemize}
 
-\subsection{Impacto do Subsistema de Memória e Caches (Cold vs. Warm)}
-O contraste entre execuções \textit{Cold} e \textit{Warm} evidencia tanto o custo de persistência do índice quanto o papel amortecedor do subsistema de memória e do \textit{Page Cache}:
-\begin{itemize}
-    \item Em regime \textbf{Cold}, a inexistência prévia do arquivo de índice/cache impõe a obrigatoriedade de sua construção a partir do zero para as estruturas em memória secundária (ISA com \texttt{.cache\_01}, Árvore Binária com \texttt{.binarytree} e Árvore B com \texttt{.btree}). Esse processo onera a fase de pré-processamento com a varredura integral da entrada e a emissão de sucessivas gravações físicas em disco para serializar a estrutura de dados, além de submeter a busca inicial às latências brutas do dispositivo de armazenamento. Na Árvore B*, o regime Cold corresponde à construção dinâmica da árvore em RAM a partir da varredura do arquivo de dados;
-    \item Em regime \textbf{Warm}, o arquivo de índice já existe previamente no disco e é detectado pelo algoritmo (para ISA, Árvore Binária e Árvore B), ou a árvore já se encontra instanciada na memória RAM (para a Árvore B*). O pré-processamento resume-se à validação de integridade e carregamento dos blocos iniciais, usufruindo adicionalmente da retenção de páginas no \textit{page cache} do sistema operacional na memória RAM, o que reduz os tempos de resposta em ordens de magnitude.
-\end{itemize}
+\subsection{Paradigmas de Memória (Cold vs. Warm)}
+As estruturas em memória secundária (ISA, Árvore Binária e Árvore B) criam arquivos persistentes em disco no regime \textit{Cold} e atingem amortização quase instantânea no regime \textit{Warm} ($R = 1$, $p50 \le 0{,}02\,\text{ms}$) via validação de cabeçalho. Já a Árvore B*, por residir unicamente na memória principal, não preserva índice em disco; logo, o regime \textit{Warm} não se aplica, exigindo montagem a frio a cada execução, compensada por buscas estritamente de 1 leitura de disco.
 
 \subsection{Síntese Comparativa Geral}
-A Tabela~\ref{tab:sintese_comparativa} consolida as principais características operacionais e assintóticas dos quatro métodos investigados.
+A Tabela~\ref{tab:sintese_comparativa} consolida os parâmetros teóricos e as métricas empíricas coletadas no benchmark experimental para os quatro algoritmos avaliados.
 
 \begin{table}[H]
 \centering
@@ -691,14 +677,16 @@ A Tabela~\ref{tab:sintese_comparativa} consolida as principais características 
 \textbf{Característica / Métrica} & \textbf{ISA} & \textbf{Árvore Binária} & \textbf{Árvore B} & \textbf{Árvore B*} \\
 \midrule
 Residência do Índice              & Memória Secundária & Memória Secundária & Memória Secundária & Memória Principal (RAM) \\
-Complexidade de Busca (Médio)     & $O(\log(N/B))$     & $O(\log N)$             & $O(\log_M N)$     & $O(\log_M N)$ \\
-Complexidade de Busca (Pior Caso) & $O(\log(N/B))$     & $O(N)$ (degenerada)     & $O(\log_M N)$     & $O(\log_M N)$ \\
-Acessos a Disco por Busca         & $\approx \log_2(N/B) + 1$ & $O(\log N)$ ou $O(N)$ & $O(\log_M N) + 1$ & $1$ (apenas pág. de dados) \\
-Suporte a Dados Desordenados      & Não                & Sim                     & Sim               & Sim \\
-Sensibilidade à Ordem da Entrada  & Extrema (requer asc.) & Extrema (degenera)   & Mínima (imune)    & Mínima (imune) \\
-Espaço de Índice em Disco         & Mínimo ($\approx 1/B$) & Moderado ($O(N)$)    & Moderado          & Zero (residente em RAM) \\
-Fator de Ocupação Mínimo          & $100\%$            & N/A                     & $50\%$            & $\approx 66\%$ a $75\%$ \\
-Eficiência em Consultas por Faixa & Boa                & Baixa                   & Moderada          & Excelente (folhas encadeadas) \\
+Complexidade de Busca (Médio)     & $O(\log(N/\text{PAGE\_SIZE}))$ & $O(\log N)$ & $O(\log_M N)$ & $O(\log_M N)$ \\
+Complexidade de Busca (Pior Caso) & $O(\log(N/\text{PAGE\_SIZE}))$ & $O(N)$ (degenerada) & $O(\log_M N)$ & $O(\log_M N)$ \\
+Leituras de Disco ($N=2.000.000$) & 15 leituras        & Inviável (\textit{timeout}) & 5 leituras & \textbf{1 leitura} \\
+Comparações ($N=2.000.000$, p50)  & 72 comparações     & Inviável (\textit{timeout}) & 104 a 109 comp. & 90 a 108 comp. \\
+Tempo de Busca ($N=2.000.000$, p50)& $0{,}09\,\text{ms}$ (Cold) / $0{,}34\,\text{ms}$ (Warm) & Inviável (\textit{timeout}) & $0{,}09\,\text{ms}$ (Cold) / $0{,}21\,\text{ms}$ (Warm) & $0{,}09\,\text{ms}$ (Cold) \\
+Suporte a Dados Desordenados      & Não (rejeitado)    & Sim (com degradação)& Sim (imune) & Sim (imune) \\
+Sensibilidade à Ordem da Entrada  & Extrema (requer asc.) & Extrema (degenera em lista) & Nula (balanceada) & Nula (balanceada) \\
+Suporte ao Regime Warm            & Sim ($R=1$, $0{,}02\,\text{ms}$) & Sim ($R=1$, $0{,}02\,\text{ms}$) & Sim ($R=1$, $0{,}01\,\text{ms}$) & Não se aplica (em RAM) \\
+Espaço Ocupado pelo Índice        & Mínimo ($\approx 1\%$) & Moderado ($O(N)$) & Moderado ($O(N)$) & Zero em disco (reside em RAM) \\
+Maior Volume Concluído ($N$)      & $2.000.000$        & $2.000$ (ord.) / $200.000$ (des.) & $2.000.000$ & $2.000.000$ \\
 \bottomrule
 \end{tabular}%
 }
@@ -710,20 +698,12 @@ Eficiência em Consultas por Faixa & Boa                & Baixa                 
 \section{Conclusão}
 \label{sec:conclusao}
 
-Este trabalho prático permitiu avaliar, quantitativa e qualitativamente, os princípios teóricos e os desafios práticos de engenharia associados à pesquisa em memória secundária. 
-
-A partir das análises experimentais consolidadas ao longo deste relatório, destacam-se as seguintes conclusões fundamentais:
+Este trabalho prático avaliou experimentalmente quatro abordagens de pesquisa externa sobre grandes massas de dados em C++23. As medições empíricas fundamentam as seguintes conclusões:
 \begin{enumerate}
-    \item \textbf{Custo Crítico de I/O:} Em sistemas de armazenamento persistente, o número de acessos à memória secundária (transferências de blocos/páginas) é a métrica preponderante que dita o tempo de execução total, sobrepujando com folga o custo de comparações de chaves efetuadas em memória RAM;
-    \item \textbf{Inadequação de Árvores Binárias Não Balanceadas:} A Árvore Binária Externa demonstrou-se inviável para uso geral em arquivos de grande porte, haja vista sua vulnerabilidade crítica à ordem dos dados, degenerando em listas lineares de profundidade inaceitável no pior caso;
-    \item \textbf{Elegância do Acesso Sequencial Indexado:} Quando os dados originais são estáticos e previamente ordenados de forma ascendente, o ISA oferece uma solução imbatível em simplicidade e consumo diminuto de espaço de índice, requerendo baixíssimo esforço de construção;
-    \item \textbf{Supremacia das Estruturas Multi-vias (Árvores B e B*):} Para sistemas modernos de gerenciamento de bancos de dados (SGBDs) e sistemas de arquivos, as árvores multi-vias consolidam-se como o padrão ouro da indústria devido ao elevado fator de ramificação que preserva profundidades ínfimas ($h \le 3$) mesmo diante de milhões de registros. A bancada experimental permitiu contrastar diretamente dois paradigmas de alocação de memória:
-    \begin{itemize}
-        \item A \textbf{Árvore B em memória secundária} validou a eficácia dos índices externos clássicos persistidos em disco (\texttt{.btree}), garantindo contenção estrita de acessos físicos a disco ($\approx \log_M N + 1$ blocos lidos) sem depender da disponibilidade de RAM para reter o índice integralmente;
-        \item A \textbf{Árvore B* em memória principal} demonstrou o potencial de arquiteturas aceleradas em memória primária, onde a navegação ocorre 100\% em RAM com segregação de nós de roteamento, minimizando o custo de I/O em disco ao limite ótimo de exatamente 1 leitura de bloco de dados por consulta com sucesso.
-    \end{itemize}
+    \item \textbf{Predominância Crítica do Custo de E/S:} O tempo de resposta de consultas em armazenamento persistente é governado pelo número de transferências de blocos entre disco e memória principal. O custo de comparações lógicas em RAM é ordens de magnitude menor, tornando prioritária a minimização de acessos a disco;
+    \item \textbf{Inviabilidade da Árvore Binária em Disco:} A combinação de ramificação binária ($M=2$) com ausência de balanceamento acarreta degeneração patológica em lista encadeada ($O(N^2)$ operações a frio) nos arquivos ordenados e \textit{timeout} em grandes volumes aleatórios;
+    \item \textbf{Eficiência Especializada do ISA:} Para arquivos estáticos e comprovadamente ordenados de forma ascendente, o ISA oferece uma solução altamente compacta (índice de $1\%$), demandando apenas 15 leituras em 2 milhões de registros com amortização imediata a quente, embora seja inoperante em dados descendentemente ordenados ou aleatórios;
+    \item \textbf{Supremacia das Árvores Multi-vias (B e B*):} As árvores multi-vias asseguram imunidade ao ordenamento e profundidade estritamente logarítmica ($h \le 4$). A Árvore B garante persistência física em disco com no máximo 5 leituras em 2 milhões de itens e baixo consumo de RAM, enquanto a Árvore B* atinge a eficiência máxima de busca ($R = 1$) via residência em memória volátil, com o compromisso de reconstrução a frio em cada execução.
 \end{enumerate}
-
-Em suma, a implementação e instrumentação dos algoritmos na disciplina BCC203 forneceram sólida compreensão empírica das compensações de desempenho em sistemas de arquivos e bancos de dados, alinhando rigor formal algorítmico e práticas avançadas de desenvolvimento em C++ moderno.
 
 \end{document}

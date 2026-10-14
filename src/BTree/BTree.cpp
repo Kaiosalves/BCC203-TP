@@ -9,7 +9,6 @@
 #include "../File.hpp"
 #include "../Item.hpp"
 #include "BTreeFile.hpp"
-#include "BTreeMemory.hpp"
 #include "IBTreeData.hpp"
 
 namespace Algorithm::BTree {
@@ -17,8 +16,6 @@ namespace Algorithm::BTree {
 BTree::BTree(File& input, bool useDisk) : input_(input) {
     if (useDisk) {
         this->tree_ = std::make_unique<BTreeFile>(input);
-    } else {
-        this->tree_ = std::make_unique<BTreeMemory>(input);
     }
     Log::Info("BTree: initialized for file " + input_.path());
 }

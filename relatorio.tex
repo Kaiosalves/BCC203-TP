@@ -92,10 +92,10 @@
     \vfill
 
     {\large \textbf{Autores:}}\\[0.25cm]
-    Kaio Alves Simões
-    Luiz Henrique Silva Sampaio
-    Victor Kangussu
-    Vinícius Brandão
+    Kaio Alves Simões\\[0.15cm]
+    Luiz Henrique Silva Sampaio\\[0.15cm]
+    Victor Kangussu\\[0.15cm]
+    Vinícius Brandão\\[0.8cm]
 
     {\large \textbf{Professor:}}\\[0.25cm]
     Prof. Guilherme Tavares de Assis
@@ -356,7 +356,7 @@ Dada a chave procurada $K$:
 \end{enumerate}
 
 \paragraph{Sensibilidade à Ordenação e Degeneração:}
-Por se tratar de uma árvore binária sem rebalanceamento automático (AVL ou Rubro-Negra), o algoritmo exibe extrema sensibilidade à ordem dos dados de entrada:
+Por se tratar de uma árvore binária sem rebalanceamento automático, o algoritmo exibe extrema sensibilidade à ordem dos dados de entrada:
 \begin{itemize}
     \item \textbf{Arquivo Ordenado (Ascendente ou Descendente):} A estrutura degenera completamente em uma lista linear encadeada de altura $h = N$. Cada inserção e cada busca passa a demandar $O(N)$ leituras de disco, provocando volumoso tráfego de I/O e degradação severa de desempenho;
     \item \textbf{Arquivo Desordenado (Aleatório):} A estrutura tende a um comportamento balanceado médio de altura $h \approx O(\log_2 N)$, reduzindo consideravelmente as leituras.
@@ -419,7 +419,9 @@ Desordenado & Warm & 2.000.000 &  - & - & - & - & - & - & - & - & - & - \\ % (Ti
 \end{table}
 
 \paragraph{Discussão dos Resultados:}
-\textit{[Espaço para análise do comportamento observado: comparar o colapso de desempenho nos casos ordenados (ascendente/descendente) devido à degeneração linear contra a eficiência proporcional a $\log_2 N$ no caso desordenado. Destacar também a diferença brutal de tempo entre o regime Cold (com acessos randômicos não sequenciais no disco) e o regime Warm.]}
+Os resultados apresentados na Tabela~\ref{tab:bench_binary_tree} evidenciam o impacto direto da ausência de um sistema de balanceamento na Árvore Binária de Pesquisa Externa. Nas Situações~1 (Ascendente) e~2 (Descendente), a inserção sequencial das chaves direciona todos os nós para um único ramo, degenerando a estrutura em uma lista encadeada linear de altura $h = O(N)$. Com isso, a inserção de cada novo elemento exige percorrer e ler sequencialmente todos os nós anteriores no arquivo (\texttt{.binarytree}), elevando o custo de construção no regime \textit{Cold Start} à complexidade quadrática $O(N^2)$ em tempo, comparações e leituras de disco. Esse comportamento é comprovado experimentalmente para $N = 2.000$, onde foram necessárias $1.000.022$ leituras e $2.000.001$ comparações (tempo mediano de $\approx 1{,}39\,\text{s}$). Essa explosão de operações de I/O inviabiliza as entradas maiores ($N \in \{20.000, \, 200.000, \, 2.000.000\}$), fazendo com que a execução ultrapasse o tempo limite e sofra invariavelmente de \textit{timeout}. Na fase de pesquisa, a degeneração também impõe um custo linear $O(N)$, demandando cerca de 500 leituras de disco para localizar uma chave em $N = 2.000$.
+
+Em contrapartida, na Situação~3 (Desordenado), a distribuição aleatória das chaves preserva uma altura média proporcional a $O(\log_2 N)$, viabilizando a construção até $N = 200.000$ e mantendo a pesquisa eficiente, com apenas 18 a 25 leituras de disco e latência inferior a $0{,}10\,\text{ms}$ a frio. No entanto, para $N = 2.000.000$, a sobrecarga de I/O em acessos aleatórios disco a disco também culmina em \textit{timeout}. Por fim, no regime \textit{Warm Start}, a reutilização do índice persistente pré-existente reduz o pré-processamento a uma única leitura de validação de metadados ($R = 1$) e apenas $0{,}02\,\text{ms}$, demonstrando a plena amortização do custo de construção nos cenários em que o arquivo foi previamente gerado.
 
 % ------------------------------------------------------------------------------
 % 3.3 Árvore B
